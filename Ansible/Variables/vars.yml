@@ -1,0 +1,5 @@
+VM_USERNAME: "sampleuser"
+VM_PUBKEY: "PASTE YOUR PUBKEY HERE"
+motd_urls:
+  - https://github.com/CircuitSlingerYT/Proxmox-PACT/raw/refs/heads/main/Ansible/Variables/motd/10-uname
+  - https://github.com/CircuitSlingerYT/Proxmox-PACT/raw/refs/heads/main/Ansible/Variables/motd/2-info
