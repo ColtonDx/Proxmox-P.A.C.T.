@@ -1,0 +1,73 @@
+- hosts: all
+  become: yes
+  tasks:
+ 
+  - name: "Update DNF Cache"
+    dnf:
+        update_cache: yes
+        cache_valid_time: 3600
+
+  - name: "Upgrade All Packages"
+    dnf:
+        name: "*"
+        state: latest
+
+  - name: Install Required Packages
+    package:
+        name:
+          - unzip
+          - zip
+          - curl
+        state: latest
+
+  - name: "Create User {{ VM_USERNAME }}"
+    user:
+        name: "{{ VM_USERNAME }}"
+        state: present
+        createhome: yes
+        shell: /bin/bash
+
+  - name: Add "{{ VM_USERNAME }}" users to sudo group
+    user:
+        name: "{{ VM_USERNAME }}"
+        groups: wheel
+        append: yes
+        state: present
+  
+  - name: Add SSH key to authorized_keys
+    authorized_key:
+        user: "{{ VM_USERNAME }}"
+        key: "{{ VM_PUBKEY }}"
+        state: present
+
+  - name: Disable remote login for root
+    ansible.builtin.lineinfile:
+      path: /etc/ssh/sshd_config
+      state: present
+      regexp: '^PermitRootLogin yes'
+      line: 'PermitRootLogin no'
+
+#  - name: Change the SSH port
+#    ansible.builtin.lineinfile:
+#      path: /etc/ssh/sshd_config
+#      state: present
+#      regexp: '^#Port 22'
+#      line: 'Port 2222'
+
+  - name: Download MOTD files
+    get_url:
+        url: "{{ item }}"
+        dest: "/etc/update-motd.d/{{ item.split('/')[-1] }}"
+        mode: '0755'
+        owner: root
+        group: root
+    with_items: "{{ motd_urls }}"
+
+  - name: Ensure correct permissions for MOTD files
+    file:
+        path: "/etc/update-motd.d/{{ item.split('/')[-1] }}"
+        owner: root
+        group: root
+        mode: '0755'
+    with_items: "{{ motd_urls }}"
+
