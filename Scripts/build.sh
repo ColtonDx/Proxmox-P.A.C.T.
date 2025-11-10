@@ -101,7 +101,7 @@ case "$OS" in
         ;;
 esac
 
-# Check if Packer is installed
+# Install Packer
 if ! command -v packer &> /dev/null
 then
     echo "Packer is not installed. Installing Packer..."
@@ -148,15 +148,15 @@ fi
 if [ "$PROXMOX_AUTH_METHOD" = "password" ]; then
     echo "Starting build using password authentication"
     # Copy files to the remote host
-    sshpass -p "$PROXMOX_SSH_PASSWORD" scp -o StrictHostKeyChecking=no ./Options.ini ./Scripts/proxmox.sh ./Scripts/cleanup.sh root@$PROXMOX_HOST:./workingdir
+    sshpass -p "$PROXMOX_SSH_PASSWORD" scp -o StrictHostKeyChecking=no ./Options.ini ./Scripts/proxmox.sh ./Scripts/cleanup.sh $PROXMOX_SSH_USER@$PROXMOX_HOST:./workingdir
     # SSH to the remote host and run proxmox.sh
-    sshpass -p "$PROXMOX_SSH_PASSWORD" ssh -o StrictHostKeyChecking=no root@$PROXMOX_HOST << 'EOF'
+    sshpass -p "$PROXMOX_SSH_PASSWORD" ssh -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@$PROXMOX_HOST << 'EOF'
     chmod +x ./workingdir/proxmox.sh
     ./workingdir/proxmox.sh
 EOF
     start_packer
     # SSH to the remote host and run cleanup.sh
-    sshpass -p "$PROXMOX_SSH_PASSWORD" ssh -o StrictHostKeyChecking=no root@$PROXMOX_HOST << 'EOF'
+    sshpass -p "$PROXMOX_SSH_PASSWORD" ssh -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@$PROXMOX_HOST << 'EOF'
     chmod +x ./workingdir/cleanup.sh
     ./workingdir/cleanup.sh
 EOF
@@ -166,16 +166,16 @@ elif [ "$PROXMOX_AUTH_METHOD" = "pubkey" ]; then
     echo "Starting build using public key authentication"
     echo "$PROXMOX_PRIVATE_KEY" > ./id_rsa
     chmod 600 ./id_rsa
-    scp -i ./id_rsa -o StrictHostKeyChecking=no ./Options.ini ./Scripts/proxmox.sh ./Scripts/cleanup.sh root@$PROXMOX_HOST:./workingdir
+    scp -i ./id_rsa -o StrictHostKeyChecking=no ./Options.ini ./Scripts/proxmox.sh ./Scripts/cleanup.sh $PROXMOX_SSH_USER@$PROXMOX_HOST:./workingdir
     # SSH to the remote host and run proxmox.sh
-    ssh -i ./id_rsa -o StrictHostKeyChecking=no root@"$PROXMOX_HOST" << 'EOF'
+    ssh -i ./id_rsa -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" << 'EOF'
     chmod +x ./workingdir/proxmox.sh
     ./workingdir/proxmox.sh
 EOF
 
     start_packer
     # SSH to the remote host and run cleanup.sh
-    ssh -i ./id_rsa -o StrictHostKeyChecking=no root@"$PROXMOX_HOST" << 'EOF'
+    ssh -i ./id_rsa -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" << 'EOF'
     chmod +x ./workingdir/cleanup.sh    
     ./workingdir/cleanup.sh
 EOF
