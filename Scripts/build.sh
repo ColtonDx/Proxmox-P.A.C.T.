@@ -178,7 +178,7 @@ elif [ "$PROXMOX_SSH_AUTH_METHOD" = "pubkey" ]; then
     echo "Starting build using public key authentication"
     # Write private key to a secure temp file and ensure it's removed on exit
     TMP_KEY="$(mktemp --tmpdir id_rsa.XXXXXX)"
-    printf '%s\n' "$PROXMOX_PRIVATE_KEY" > "$TMP_KEY"
+    printf '%s\n' "$PROXMOX_SSH_PRIVATE_KEY" > "$TMP_KEY"
     chmod 600 "$TMP_KEY"
     trap 'rm -f "$TMP_KEY"' EXIT
 
