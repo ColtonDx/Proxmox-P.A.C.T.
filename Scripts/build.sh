@@ -3,6 +3,7 @@
 #### Start the Build ####
 # Load configuration file
 source ./Options.ini
+source ./.env.local
 
 #####################################################################################
 ###################FUNCTIONS
