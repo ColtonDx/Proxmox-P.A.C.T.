@@ -63,7 +63,7 @@ On the Host
     - **VMID 822 | 922**: Fedora 40
     - **VMID 831 | 931**: Rocky 9
 
-   <b> PROXMOX_AUTH_METHOD </b>
+   <b> PROXMOX_SSH_AUTH_METHOD </b>
    
     This variable can be set to either 'password' or 'pubkey'. This will determine how the script connects to your Proxmox instance to make the changes to the host and build the templates. The API is used for Packer to do its thing but building the initial templates is done via SSH
 
@@ -79,14 +79,17 @@ On the Host
 
     The Proxmox API Token that you've generated for packer. Example: packer_user@pam!packer
 
+  <b> PROXMOX_API_TOKEN_SECRET </b>
+     The Proxmox API Token Secret that you've generated for packer.
+
    <b> PROXMOX_STORAGE_POOL </b>
 
     The Storage Pool that you want the Templates and VM disks stored on. For example local-lvm.
 
 
-2. Decide between running manually or running via a Git Runner. Note: Running manually cannot be done from the Proxmox host without making major changes to the script since the script will use SSH to connect to the Proxmox instance.
+3. Decide between running manually or running via a Git Runner. Note: Running manually cannot be done from the Proxmox host without making major changes to the script since the script will use SSH to connect to the Proxmox instance.
 
-3. Running Manually - Skip to Step 4 if using Git Runner
+4. Running Manually - Skip to Step 4 if using Git Runner
 
     i. Download the repo to the machine you intend to run the build from.
 
@@ -96,14 +99,14 @@ On the Host
     ii. Load your Secrets (API Key and SSH Password OR SSH Private Key) into a Secrets File or an Environment Variable. Options.ini has a commented out section for an include file for secrets. You can also use the following environment variables:
       - $PROXMOX_API_TOKEN_SECRET
       - $PROXMOX_SSH_PASSWORD
-      - $PROXMOX_PRIVATE_KEY
+      - $PROXMOX_SSH_PRIVATE_KEY
 
     ii. Run the build script manually:
 
         sudo chmod +x ./Scripts/build.sh
         sudo ./Scripts/build.sh
         
-4. Running with Git
+5. Running with Git
 
     i. Set up your Git workflows in `.github/workflows/` to trigger the build and deployment process.
 
@@ -112,7 +115,7 @@ On the Host
     iii. Make sure to set your secrets in Git Actions, or create another way for these environment variables to be set:
       - $PROXMOX_API_TOKEN_SECRET
       - $PROXMOX_SSH_PASSWORD
-      - $PROXMOX_PRIVATE_KEY
+      - $PROXMOX_SSH_PRIVATE_KEY
     
     iv. Commit and push your changes to the repository. Git will automatically detect the workflow and run the scripts.
 
