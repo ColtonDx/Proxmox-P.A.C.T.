@@ -5,14 +5,22 @@ P.A.C.T. stands for Packer Ansible CloudInit Templates, for Proxmox! P.A.C.T. cr
 
 ## How it Works
 
+On the Host:
+1. The script runs from anywhere, downloading Ansible and Packer to the host it runs on.
+2. Creates an SSH Connection to the Proxmox Host defined in Options.ini using the Authentication declared in .env.local
+3. Uploads the Options.ini and Proxmox.sh to the Proxmox host
+
+On Proxmox:
 1. Checks the Options.ini file to see what templates should be downloaded.
 2. Deletes an any existing template/VM at the VMID that its trying to build on
 3. Downloads the qcow2 image for the distro
 4. Builds a VM with CloudInit using this image.
 5. Converts this VM to a template
-6. Runs the Packer file based on the distro
-7. Runs the Ansible playbook based on the distro
-8. Converts the new VM to a template, and deletes the source template
+
+On the Host
+1. Runs the Packer file based on the distro for each template defined in Options.ini
+2. Runs the Ansible playbook based on the distro for each templated defined in Options.ini
+3. Converts the new VM to a template, and deletes the source template
 
 ## Repository Structure
 
