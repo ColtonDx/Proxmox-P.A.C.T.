@@ -57,7 +57,7 @@ source "proxmox-clone" "Rocky9" {
     insecure_skip_tls_verify = true
 
     # VM General Settings
-    node = "pve1"
+        node = "${var.proxmox_host_node}"
     vm_id = "${var.vmid}"
     vm_name   = "PACT-Rocky-Linux-9"
     template_description = "An Image Customized by Packer. Build Date: ${local.build_time}"
@@ -107,11 +107,7 @@ build {
         ]
     }
 
-    provisioner "ansible" {
-         playbook_file = "./Ansible/Playbooks/fedora39.yml"
-         use_proxy = false
-         extra_arguments = ["-e", "@./Ansible/Variables/vars.yml"]
-    }
+        # Run Rocky-specific Ansible playbook (rocky9.yml) later in the build
 
     # Generalizing the Image
     provisioner "shell" {

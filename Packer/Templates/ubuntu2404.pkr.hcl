@@ -57,7 +57,7 @@ source "proxmox-clone" "Ubuntu2404" {
     insecure_skip_tls_verify = true
 
     # VM General Settings
-    node = "pve1"
+    node = "${var.proxmox_host_node}"
     vm_id = "${var.vmid}"
     vm_name   = "PACT-Ubuntu-24.04"
     template_description = "An Image Customized by Packer. Build Date: ${local.build_time}"

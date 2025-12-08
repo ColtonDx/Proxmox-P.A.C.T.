@@ -104,6 +104,12 @@ case "$OS" in
     centos|rocky|almalinux|fedora|rhel)
         sudo dnf install -y $PACKAGES > /dev/null 2>&1
         ;;
+    alpine)
+        # Alpine uses apk; map packages to Alpine equivalents and install Ansible via pip3
+        sudo apk add --no-cache gnupg openssh-client sshpass unzip wget nodejs git python3 py3-pip > /dev/null 2>&1
+        sudo pip3 install --upgrade pip setuptools > /dev/null 2>&1 || true
+        sudo pip3 install ansible > /dev/null 2>&1 || { echo "Failed to install ansible via pip3 on Alpine" >&2; exit 1; }
+        ;;
     opensuse|sles)
         sudo zypper install -y $PACKAGES > /dev/null 2>&1
         ;;
