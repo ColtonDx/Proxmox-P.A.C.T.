@@ -44,13 +44,6 @@
       regexp: '^PermitRootLogin yes'
       line: 'PermitRootLogin no'
 
-#  - name: Change the SSH port
-#    ansible.builtin.lineinfile:
-#      path: /etc/ssh/sshd_config
-#      state: present
-#      regexp: '^#Port 22'
-#      line: 'Port 2222'
-
   - name: Download MOTD files
     get_url:
         url: "{{ item }}"

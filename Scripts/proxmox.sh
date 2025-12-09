@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#This is the script that will be run on the Proxmox server to create the VM templates.
+
 # Load configuration file
 source ./workingdir/Options.ini
 
