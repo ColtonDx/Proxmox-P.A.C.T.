@@ -4,11 +4,11 @@
 packer {
   required_plugins {
     proxmox = {
-      version = ">= 1.2.2"
+      version = ">= 1.1.8"
       source  = "github.com/hashicorp/proxmox"
     }
     ansible = {
-      version = "~> 1"
+      version = ">= 1.0.0, < 1.1.4"
       source  = "github.com/hashicorp/ansible"
     }
   }
@@ -110,7 +110,7 @@ build {
     }
    
     provisioner "ansible" {
-         playbook_file = "./Ansible/Playbooks/centos9.yml"
+         playbook_file = "./Ansible/Playbooks/generic.yml"
          use_proxy = false
          extra_arguments = ["-e", "@./Ansible/Variables/vars.yml"]
     }

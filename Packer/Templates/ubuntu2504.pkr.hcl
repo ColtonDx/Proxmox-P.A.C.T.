@@ -1,14 +1,14 @@
 #---
-# Packer Template to create an Debian Server Image on Proxmox from a cloned Template  
+# Packer Template to create an Ubuntu 25.04 Server Image on Proxmox from a cloned Template  
 
 packer {
   required_plugins {
     proxmox = {
-      version = "~> 1"
+      version = ">= 1.1.8"
       source  = "github.com/hashicorp/proxmox"
     }
     ansible = {
-      version = "~> 1"
+      version = ">= 1.0.0, < 1.1.4"
       source  = "github.com/hashicorp/ansible"
     }
   }
@@ -47,7 +47,7 @@ locals {
 
 
 # Resource Definiation for the VM Template
-source "proxmox-clone" "Debian13" {
+source "proxmox-clone" "Ubuntu2504" {
 
     # Proxmox Connection Settings
     proxmox_url = "${var.proxmox_api_url}"
@@ -59,9 +59,9 @@ source "proxmox-clone" "Debian13" {
     # VM General Settings
     node = "${var.proxmox_host_node}"
     vm_id = "${var.vmid}"
-    vm_name   = "PACT-Debian-13"
+    vm_name   = "PACT-Ubuntu-2504"
     template_description = "An Image Customized by Packer. Build Date: ${local.build_time}"
-    clone_vm = "Template-Debian-13"
+    clone_vm = "Template-Ubuntu-2504"
     ssh_username = "root"
     qemu_agent = true
 
@@ -74,7 +74,6 @@ source "proxmox-clone" "Debian13" {
     memory = "1024"
 
     # VM Network Settings
-
     network_adapters {
         model = "virtio"
         bridge = "vmbr0"
@@ -95,8 +94,8 @@ source "proxmox-clone" "Debian13" {
 # Build Definition to create the VM Template
 build {
 
-    name = "Debian3-Packer"
-    sources = ["proxmox-clone.Debian13"]
+    name = "Ubuntu2504-Packer"
+    sources = ["proxmox-clone.Ubuntu2504"]
 
     # Generalizing the Image
     provisioner "shell" {
@@ -109,7 +108,7 @@ build {
     }
 
     provisioner "ansible" {
-      playbook_file = "./Ansible/Playbooks/debian13.yml"
+      playbook_file = "./Ansible/Playbooks/generic.yml"
       use_proxy = false
       extra_arguments = ["-e", "@./Ansible/Variables/vars.yml"]
     }
@@ -128,5 +127,5 @@ build {
             "sudo rm -rf /var/log/* /home/*/.bash_history"
         ]
     }
-
+   
 }

@@ -1,19 +1,18 @@
 #---
-# Packer Template to create an Fedora Server Image on Proxmox from a cloned Template  
+# Packer Template to create an Debian Server Image on Proxmox from a cloned Template  
 
 packer {
   required_plugins {
     proxmox = {
-      version = ">= 1.2.2"
+      version = ">= 1.1.8"
       source  = "github.com/hashicorp/proxmox"
     }
     ansible = {
-      version = "~> 1"
+      version = ">= 1.0.0, < 1.1.4"
       source  = "github.com/hashicorp/ansible"
     }
   }
 }
-
 # Variable Definitions
 variable "proxmox_api_url" {
     type = string
@@ -48,7 +47,7 @@ locals {
 
 
 # Resource Definiation for the VM Template
-source "proxmox-clone" "Fedora40" {
+source "proxmox-clone" "Debian12" {
 
     # Proxmox Connection Settings
     proxmox_url = "${var.proxmox_api_url}"
@@ -60,9 +59,9 @@ source "proxmox-clone" "Fedora40" {
     # VM General Settings
     node = "${var.proxmox_host_node}"
     vm_id = "${var.vmid}"
-    vm_name   = "PACT-Fedora-40"
+    vm_name   = "PACT-Debian-12"
     template_description = "An Image Customized by Packer. Build Date: ${local.build_time}"
-    clone_vm = "Template-Fedora-40"
+    clone_vm = "Template-Debian-12"
     ssh_username = "root"
     qemu_agent = true
 
@@ -81,47 +80,52 @@ source "proxmox-clone" "Fedora40" {
         firewall = "false"
     }
 
+    ipconfig {
+      ip = "dhcp"
+          }
+
     # VM Cloud-Init Settings
     cloud_init = true
     cloud_init_storage_pool = "${var.storage_pool}"
+
 
 }
 
 # Build Definition to create the VM Template
 build {
 
-    name = "Fedora40-Packer"
-    sources = ["proxmox-clone.Fedora40"]
+    name = "Debian12-Packer"
+    sources = ["proxmox-clone.Debian12"]
 
-    # Waiting on CloudInit
+      # Generalizing the Image
     provisioner "shell" {
         inline = [
-            "while [ ! -f /var/lib/cloud/instance/boot-finished ]; do sleep 1; done",
-            "sudo dnf update -y",
+            "while [ ! -f /var/lib/cloud/instance/boot-finished ]; do echo 'Waiting for cloud-init...'; sleep 1; done",
+            "sudo apt-get update -y",
             "export ANSIBLE_HOST_KEY_CHECKING=False", 
             "export ANSIBLE_REMOTE_TEMP=/tmp/.ansible"
         ]
     }
 
     provisioner "ansible" {
-         playbook_file = "./Ansible/Playbooks/fedora40.yml"
-         use_proxy = false
-         extra_arguments = ["-e", "@./Ansible/Variables/vars.yml"]
+      playbook_file = "./Ansible/Playbooks/generic.yml"
+      use_proxy = false
+      extra_arguments = ["-e", "@./Ansible/Variables/vars.yml"]
     }
 
-    # Generalizing the Image
     provisioner "shell" {
         inline = [
             "sudo rm /etc/ssh/ssh_host_*",
             "sudo truncate -s 0 /etc/machine-id",
-            "sudo dnf autoremove -y",
-            "sudo dnf clean all",
+            "sudo apt-get -y autoremove --purge",
+            "sudo apt-get -y clean",
+            "sudo apt-get -y autoclean",
             "sudo cloud-init clean",
             "sudo rm -f /etc/cloud/cloud.cfg.d/subiquity-disable-cloudinit-networking.cfg",
-            "sudo rm -f /etc/NetworkManager/system-connections/*",
+            "sudo rm -f /etc/netplan/00-installer-config.yaml",
             "sudo sync",
             "sudo rm -rf /var/log/* /home/*/.bash_history"
         ]
     }
-   
+
 }

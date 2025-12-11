@@ -5,14 +5,22 @@ P.A.C.T. stands for Packer Ansible CloudInit Templates, for Proxmox! P.A.C.T. cr
 
 ## How it Works
 
+On the Host:
+1. The script runs from anywhere, downloading Ansible and Packer to the host it runs on.
+2. Creates an SSH Connection to the Proxmox Host defined in Options.ini using the Authentication declared in .env.local
+3. Uploads the Options.ini and Proxmox.sh to the Proxmox host
+
+On Proxmox:
 1. Checks the Options.ini file to see what templates should be downloaded.
 2. Deletes an any existing template/VM at the VMID that its trying to build on
 3. Downloads the qcow2 image for the distro
 4. Builds a VM with CloudInit using this image.
 5. Converts this VM to a template
-6. Runs the Packer file based on the distro
-7. Runs the Ansible playbook based on the distro
-8. Converts the new VM to a template, and deletes the source template
+
+On the Host
+1. Runs the Packer file based on the distro for each template defined in Options.ini
+2. Runs the Ansible playbook based on the distro for each templated defined in Options.ini
+3. Converts the new VM to a template, and deletes the source template
 
 ## Repository Structure
 
@@ -29,9 +37,46 @@ P.A.C.T. stands for Packer Ansible CloudInit Templates, for Proxmox! P.A.C.T. cr
   - **Variables/**: Variables configuration file for Packer. Not currently in use by the default build, however there is a vars.json file in here that you can add variables to and will be imported into each packer build, makes for easier customization.
 
 - **Ansible/**
-  - **Playbooks/**: Contains Ansible playbooks for baseline configuration. The default playbooks have commented out examples of what you can do with it, the only thing the default playbooks do is update the Guest OS.
-  - **Variables/**: Contains the variables file for adding your custom user accounts, public keys, or other customizations to your playbooks.
-      - **motd/**: Contains files to be downloaded by the script to add some custom MOTD such as showing VM stats when you log in via SSH.
+  - **Playbooks/**: Contains Ansible playbooks for baseline configuration. The `generic.yml` playbook is used by all Packer templates and automatically detects the OS family (Debian/Ubuntu or RHEL/Fedora/CentOS) to apply the appropriate package manager and updates.
+  - **Variables/**: Contains the variables file for customizing your playbooks.
+
+## Getting Started
+
+### Quick Setup
+
+1. **Clone the Repository**
+
+   ```bash
+   git clone https://github.com/ColtonDx/Proxmox-P.A.C.T.git
+   cd Proxmox-P.A.C.T
+   ```
+
+2. **Create Environment Configuration Files**
+
+   Edit `Options.ini` with your Proxmox settings (nVMID, storage pool, host information).
+
+   Edit `.env.local` with your authentication credentials:
+   - For password authentication: Set `PROXMOX_SSH_AUTH_METHOD="password"` and `PROXMOX_SSH_PASSWORD`
+   - For key-based authentication: Set `PROXMOX_SSH_AUTH_METHOD="pubkey"` and `PROXMOX_SSH_PRIVATE_KEY_PATH` to point to your private key file
+
+3. **Make the Build Script Executable**
+
+   ```bash
+   chmod +x ./Scripts/build.sh
+   ```
+
+4. **Run the Build Script**
+
+   ```bash
+   sudo ./Scripts/build.sh
+   ```
+
+   The script will automatically:
+   - Install required packages (Packer, Ansible, etc.)
+   - Connect to your Proxmox host via SSH
+   - Create base templates on Proxmox
+   - Customize templates with Packer and Ansible
+   - Convert customized VMs to templates
 
 ## Prerequisites
 
@@ -49,13 +94,13 @@ P.A.C.T. stands for Packer Ansible CloudInit Templates, for Proxmox! P.A.C.T. cr
     - **VMID 801 | 901**: Debian 11
     - **VMID 802 | 902**: Debian 12 
     - **VMID 803 | 903**: Debian 13
-    - **VMID 811 | 911**: Ubuntu 22.04
-    - **VMID 812 | 912**: Ubuntu 24.04
-    - **VMID 821 | 921**: Fedora 39
-    - **VMID 822 | 922**: Fedora 40
+    - **VMID 811 | 911**: Ubuntu 2204
+    - **VMID 812 | 912**: Ubuntu 2404
+    - **VMID 813 | 913**: Ubuntu 2504
+    - **VMID 821 | 921**: Fedora 41
     - **VMID 831 | 931**: Rocky 9
 
-   <b> PROXMOX_AUTH_METHOD </b>
+   <b> PROXMOX_SSH_AUTH_METHOD </b>
    
     This variable can be set to either 'password' or 'pubkey'. This will determine how the script connects to your Proxmox instance to make the changes to the host and build the templates. The API is used for Packer to do its thing but building the initial templates is done via SSH
 
@@ -71,14 +116,17 @@ P.A.C.T. stands for Packer Ansible CloudInit Templates, for Proxmox! P.A.C.T. cr
 
     The Proxmox API Token that you've generated for packer. Example: packer_user@pam!packer
 
+  <b> PROXMOX_API_TOKEN_SECRET </b>
+     The Proxmox API Token Secret that you've generated for packer.
+
    <b> PROXMOX_STORAGE_POOL </b>
 
     The Storage Pool that you want the Templates and VM disks stored on. For example local-lvm.
 
 
-2. Decide between running manually or running via a Git Runner. Note: Running manually cannot be done from the Proxmox host without making major changes to the script since the script will use SSH to connect to the Proxmox instance.
+3. Decide between running manually or running via a Git Runner. Note: Running manually cannot be done from the Proxmox host without making major changes to the script since the script will use SSH to connect to the Proxmox instance.
 
-3. Running Manually - Skip to Step 4 if using Git Runner
+4. Running Manually - Skip to Step 4 if using Git Runner
 
     i. Download the repo to the machine you intend to run the build from.
 
@@ -88,14 +136,14 @@ P.A.C.T. stands for Packer Ansible CloudInit Templates, for Proxmox! P.A.C.T. cr
     ii. Load your Secrets (API Key and SSH Password OR SSH Private Key) into a Secrets File or an Environment Variable. Options.ini has a commented out section for an include file for secrets. You can also use the following environment variables:
       - $PROXMOX_API_TOKEN_SECRET
       - $PROXMOX_SSH_PASSWORD
-      - $PROXMOX_PRIVATE_KEY
+      - $PROXMOX_SSH_PRIVATE_KEY
 
     ii. Run the build script manually:
 
         sudo chmod +x ./Scripts/build.sh
         sudo ./Scripts/build.sh
         
-4. Running with Git
+5. Running with Git
 
     i. Set up your Git workflows in `.github/workflows/` to trigger the build and deployment process.
 
@@ -104,7 +152,7 @@ P.A.C.T. stands for Packer Ansible CloudInit Templates, for Proxmox! P.A.C.T. cr
     iii. Make sure to set your secrets in Git Actions, or create another way for these environment variables to be set:
       - $PROXMOX_API_TOKEN_SECRET
       - $PROXMOX_SSH_PASSWORD
-      - $PROXMOX_PRIVATE_KEY
+      - $PROXMOX_SSH_PRIVATE_KEY
     
     iv. Commit and push your changes to the repository. Git will automatically detect the workflow and run the scripts.
 
@@ -121,10 +169,10 @@ Coming Soon...
 - Debian 11
 - Debian 12
 - Debian 13
-- Ubuntu 22.04
-- Ubuntu 24.04
-- Fedora 39
-- Fedora 40
+- Ubuntu 2204
+- Ubuntu 2404
+- Ubuntu 2504
+- Fedora 41
 - Rocky Linux 9
 - CentOS 9
 

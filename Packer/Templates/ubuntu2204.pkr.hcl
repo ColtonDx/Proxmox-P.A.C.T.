@@ -4,11 +4,11 @@
 packer {
   required_plugins {
     proxmox = {
-      version = ">= 1.2.2"
+      version = ">= 1.1.8"
       source  = "github.com/hashicorp/proxmox"
     }
     ansible = {
-      version = "~> 1"
+      version = ">= 1.0.0, < 1.1.4"
       source  = "github.com/hashicorp/ansible"
     }
   }
@@ -57,11 +57,11 @@ source "proxmox-clone" "Ubuntu2204" {
     insecure_skip_tls_verify = true
 
     # VM General Settings
-    node = "pve1"
+    node = "${var.proxmox_host_node}"
     vm_id = "${var.vmid}"
-    vm_name   = "PACT-Ubuntu-22.04"
+    vm_name   = "PACT-Ubuntu-2204"
     template_description = "An Image Customized by Packer. Build Date: ${local.build_time}"
-    clone_vm = "Template-Ubuntu-22.04"
+    clone_vm = "Template-Ubuntu-2204"
     ssh_username = "root"
     qemu_agent = true
 
@@ -107,7 +107,7 @@ build {
     }
 
     provisioner "ansible" {
-      playbook_file = "./Ansible/Playbooks/ubuntu2204.yml"
+      playbook_file = "./Ansible/Playbooks/generic.yml"
       use_proxy = false
       extra_arguments = ["-e", "@./Ansible/Variables/vars.yml"]
     }

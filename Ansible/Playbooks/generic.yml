@@ -1,0 +1,28 @@
+- hosts: all
+  become: yes
+  tasks:
+ 
+  - name: "Update system packages (Debian/Ubuntu)"
+    apt:
+        update_cache: true
+        upgrade: dist
+        cache_valid_time: 3600
+        force_apt_get: true
+    when: ansible_os_family == "Debian"
+
+  - name: "Update system packages (RHEL/Fedora/CentOS)"
+    dnf:
+        update_cache: yes
+        cache_valid_time: 3600
+        name: "*"
+        state: latest
+    when: ansible_os_family == "RedHat"
+
+  - name: Install Required Packages
+    package:
+        name:
+          - unzip
+          - zip
+          - curl
+          - nano
+        state: latest

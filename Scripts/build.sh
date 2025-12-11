@@ -1,8 +1,20 @@
 #!/bin/bash
 
 #### Start the Build ####
-# Load configuration file
+# Load configuration file (required)
+if [ ! -f ./Options.ini ]; then
+    echo "Missing required file: Options.ini" >&2
+    exit 1
+fi
+# shellcheck disable=SC1090
 source ./Options.ini
+
+if [ ! -f ./.env.local ]; then
+    echo "Missing required file: .env.local" >&2
+    exit 1
+fi
+# shellcheck disable=SC1090
+source ./.env.local
 
 #####################################################################################
 ###################FUNCTIONS
@@ -26,25 +38,25 @@ start_packer() {
         packer_build debian13.pkr.hcl $((nVMID + 103))
     fi
 
-    # Ubuntu 22.04 LTS
-    if [ "$Download_UBUNTU_22_04_LTS" == "Y" ]; then
+    # Ubuntu 2204
+    if [ "$Download_UBUNTU_2204" == "Y" ]; then
         packer_build ubuntu2204.pkr.hcl $((nVMID + 111))
     fi
 
-    # Ubuntu 24.04
-    if [ "$Download_UBUNTU_24_04" == "Y" ]; then
+    # Ubuntu 2404
+    if [ "$Download_UBUNTU_2404" == "Y" ]; then
 
         packer_build ubuntu2404.pkr.hcl $((nVMID + 112))
     fi
 
-    # Fedora 39
-    if [ "$Download_FEDORA_39" == "Y" ]; then
-        packer_build fedora39.pkr.hcl $((nVMID + 121))
+    # Ubuntu 2504
+    if [ "$Download_UBUNTU_2504" == "Y" ]; then
+        packer_build ubuntu2504.pkr.hcl $((nVMID + 113))
     fi
 
-    # Fedora 40
-    if [ "$Download_FEDORA_40" == "Y" ]; then
-        packer_build fedora40.pkr.hcl $((nVMID + 122))
+    # Fedora 41
+    if [ "$Download_FEDORA_41" == "Y" ]; then
+        packer_build fedora41.pkr.hcl $((nVMID + 121))
     fi
 
     # Rocky Linux 9
@@ -101,7 +113,7 @@ case "$OS" in
         ;;
 esac
 
-# Check if Packer is installed
+# Install Packer
 if ! command -v packer &> /dev/null
 then
     echo "Packer is not installed. Installing Packer..."
@@ -145,43 +157,46 @@ if [ "$CUSTOM_PACKER_REPO" != "N" ]; then
 fi
 
 # Checking if we are using Password Authentication, then starting build
-if [ "$PROXMOX_AUTH_METHOD" = "password" ]; then
+if [ "$PROXMOX_SSH_AUTH_METHOD" = "password" ]; then
     echo "Starting build using password authentication"
     # Copy files to the remote host
-    sshpass -p "$PROXMOX_SSH_PASSWORD" scp -o StrictHostKeyChecking=no ./Options.ini ./Scripts/proxmox.sh ./Scripts/cleanup.sh root@$PROXMOX_HOST:./workingdir
+    sshpass -p "$PROXMOX_SSH_PASSWORD" scp -o StrictHostKeyChecking=no ./Options.ini ./Scripts/proxmox.sh ./Scripts/cleanup.sh $PROXMOX_SSH_USER@$PROXMOX_HOST:./workingdir
     # SSH to the remote host and run proxmox.sh
-    sshpass -p "$PROXMOX_SSH_PASSWORD" ssh -o StrictHostKeyChecking=no root@$PROXMOX_HOST << 'EOF'
+    sshpass -p "$PROXMOX_SSH_PASSWORD" ssh -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@$PROXMOX_HOST << 'EOF'
     chmod +x ./workingdir/proxmox.sh
     ./workingdir/proxmox.sh
 EOF
     start_packer
     # SSH to the remote host and run cleanup.sh
-    sshpass -p "$PROXMOX_SSH_PASSWORD" ssh -o StrictHostKeyChecking=no root@$PROXMOX_HOST << 'EOF'
+    sshpass -p "$PROXMOX_SSH_PASSWORD" ssh -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@$PROXMOX_HOST << 'EOF'
     chmod +x ./workingdir/cleanup.sh
     ./workingdir/cleanup.sh
 EOF
 
 # Checking if we are using Pubkey authentication, then starting build
-elif [ "$PROXMOX_AUTH_METHOD" = "pubkey" ]; then
+elif [ "$PROXMOX_SSH_AUTH_METHOD" = "pubkey" ]; then
     echo "Starting build using public key authentication"
-    echo "$PROXMOX_PRIVATE_KEY" > ./id_rsa
-    chmod 600 ./id_rsa
-    scp -i ./id_rsa -o StrictHostKeyChecking=no ./Options.ini ./Scripts/proxmox.sh ./Scripts/cleanup.sh root@$PROXMOX_HOST:./workingdir
+    # Verify private key file exists
+    if [ ! -f "$PROXMOX_SSH_PRIVATE_KEY_PATH" ]; then
+        echo "Private key file not found: $PROXMOX_SSH_PRIVATE_KEY_PATH" >&2
+        exit 1
+    fi
+
+    scp -i "$PROXMOX_SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no ./Options.ini ./Scripts/proxmox.sh ./Scripts/cleanup.sh $PROXMOX_SSH_USER@$PROXMOX_HOST:./workingdir
     # SSH to the remote host and run proxmox.sh
-    ssh -i ./id_rsa -o StrictHostKeyChecking=no root@"$PROXMOX_HOST" << 'EOF'
+    ssh -i "$PROXMOX_SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" << 'EOF'
     chmod +x ./workingdir/proxmox.sh
     ./workingdir/proxmox.sh
 EOF
 
     start_packer
     # SSH to the remote host and run cleanup.sh
-    ssh -i ./id_rsa -o StrictHostKeyChecking=no root@"$PROXMOX_HOST" << 'EOF'
+    ssh -i "$PROXMOX_SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" << 'EOF'
     chmod +x ./workingdir/cleanup.sh    
     ./workingdir/cleanup.sh
 EOF
-    rm -r ./id_rsa
 
 else
-    echo "Unknown authentication method: $PROXMOX_AUTH_METHOD - Exiting"
+    echo "Unknown authentication method: $PROXMOX_SSH_AUTH_METHOD - Exiting"
     exit 1
 fi
