@@ -14,8 +14,7 @@
 #  - Conditional Packer builds: Optionally run Packer to customize VM images
 #
 #  - Flexible configuration:
-#    * Load from Options.ini and .env.local (default)
-#    * Load from custom file via --var-file=PATH
+#    * Load from config file via --config=PATH (default: Options.ini)
 #    * Load from environment variables via --env
 #
 #  - Smart dependency management:
@@ -27,8 +26,9 @@
 # Options:
 #   --ansible       Use Ansible-only mode (skip SSH to Proxmox)
 #   --packer        Run Packer builds for image customization
+#   --rebuild       Delete existing VMs before rebuilding (destructive)
 #   --interactive   Prompt user for deployment mode and Packer option
-#   --var-file=PATH Load variables from custom file
+#   --config=PATH   Load variables from config file (default: Options.ini)
 #   --env           Load variables from environment variables
 #   --help          Show help message
 #
@@ -41,10 +41,10 @@
 # Default flags and values
 USE_ANSIBLE=false
 RUN_PACKER=false
+REBUILD=false
 INTERACTIVE_MODE=false
 USE_ENV_VARS=false
-VAR_FILE="./Options.ini"
-ENV_FILE="./.env.local"
+CONFIG_FILE="./Options.ini"
 SSH_PRIVATE_KEY_PATH=""
 
 print_usage() {
@@ -54,16 +54,18 @@ Usage: $0 [OPTIONS]
 Options:
   --ansible         Skip SSH to Proxmox and skip running proxmox.sh. Use Ansible only.
   --packer          Run Packer builds for image customization.
+  --rebuild         Delete existing VMs before building new ones (destructive).
   --interactive     Prompt the user to choose between SSH and Ansible, and whether to run Packer.
-  --var-file=PATH   Path to variables file (default: ./Options.ini). Ignored if --env is set.
-  --env             Load all variables from environment variables instead of files.
+  --config=PATH     Path to config file (default: ./Options.ini). Ignored if --env is set.
+  --env             Load all variables from environment variables instead of config file.
   --ssh-key=PATH    Path to SSH private key for authentication. If not provided, password auth is used.
   --help            Show this help and exit
 
 Notes:
   - If --interactive is set, --ansible and --packer are ignored.
   - Without any flags, defaults to SSH mode (password auth) without Packer.
-  - If --env is set, --var-file is ignored.
+  - If --env is set, --config is ignored.
+  - Without --rebuild, existing VMs at target VMIDs are preserved (safer).
 EOF
 }
 
@@ -76,11 +78,14 @@ for arg in "$@"; do
         --packer)
             RUN_PACKER=true
             ;;
+        --rebuild)
+            REBUILD=true
+            ;;
         --interactive)
             INTERACTIVE_MODE=true
             ;;
-        --var-file=*)
-            VAR_FILE="${arg#*=}"
+        --config=*)
+            CONFIG_FILE="${arg#*=}"
             ;;
         --env)
             USE_ENV_VARS=true
@@ -100,23 +105,17 @@ for arg in "$@"; do
     esac
 done
 
-# Load configuration files or environment variables
+# Load configuration file or environment variables
 if [ "$USE_ENV_VARS" = true ]; then
     echo "Loading variables from environment variables..."
 else
-    # Load variables file (default or custom)
-    if [ ! -f "$VAR_FILE" ]; then
-        echo "Missing required file: $VAR_FILE" >&2
+    # Load config file (default or custom)
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo "Missing required file: $CONFIG_FILE" >&2
         exit 1
     fi
     # shellcheck disable=SC1090
-    source "$VAR_FILE"
-
-    # Load .env.local if it exists
-    if [ -f "$ENV_FILE" ]; then
-        # shellcheck disable=SC1090
-        source "$ENV_FILE"
-    fi
+    source "$CONFIG_FILE"
 fi
 
 # Set defaults for unset variables
@@ -142,14 +141,20 @@ if [ "$INTERACTIVE_MODE" = true ]; then
         RUN_PACKER=true
     fi
     
+    # Ask about rebuild
+    read -p "Delete existing VMs before building (rebuild)? (y/n): " -r choice_rebuild
+    if [[ "$choice_rebuild" =~ ^[Yy]$ ]]; then
+        REBUILD=true
+    fi
+    
     # Ask for configuration file path
-    read -p "Path to variables file (press Enter for default './Options.ini'): " -r var_file_input
-    if [ -n "$var_file_input" ]; then
-        VAR_FILE="$var_file_input"
+    read -p "Path to config file (press Enter for default './Options.ini'): " -r config_file_input
+    if [ -n "$config_file_input" ]; then
+        CONFIG_FILE="$config_file_input"
         USE_ENV_VARS=false
     else
         # Ask if user wants to use environment variables instead
-        read -p "Use environment variables instead of file? (y/n): " -r choice_env
+        read -p "Use environment variables instead of config file? (y/n): " -r choice_env
         if [[ "$choice_env" =~ ^[Yy]$ ]]; then
             USE_ENV_VARS=true
         fi
@@ -198,9 +203,10 @@ fi
 echo "Build Configuration:"
 echo "  Use Ansible: $USE_ANSIBLE"
 echo "  Run Packer: $RUN_PACKER"
+echo "  Rebuild VMs: $REBUILD"
 echo "  Using environment variables: $USE_ENV_VARS"
 if [ "$USE_ENV_VARS" = false ]; then
-    echo "  Variables file: $VAR_FILE"
+    echo "  Config file: $CONFIG_FILE"
 fi
 echo ""
 
@@ -326,6 +332,11 @@ if [ "$USE_ANSIBLE" = true ]; then
 else
     # Build proxmox.sh arguments based on configuration
     PROXMOX_SCRIPT_ARGS="--vmid=$nVMID --storage=$PROXMOX_STORAGE_POOL"
+    
+    # Add rebuild flag if enabled
+    if [ "$REBUILD" = true ]; then
+        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --rebuild"
+    fi
     
     # Build --build argument based on which distros are enabled
     BUILD_LIST=""

@@ -56,13 +56,15 @@ The workflow has three deployment modes for template creation:
     - `--interactive`: Interactive mode with user prompts for all settings
     - `--packer`: Enable Packer customization phase
     - `--ansible`: Enable Ansible playbook execution (alternative to SSH)
+    - `--rebuild`: Delete existing VMs before rebuilding (prevents accidental deletion without this flag)
     - `--ssh-key PATH`: Use SSH key instead of password authentication
-    - `--env`: Load variables from .env.local file
-    - `--var-file PATH`: Load variables from custom file
+    - `--config PATH`: Load variables from custom config file (default: Options.ini)
+    - `--env`: Load variables from environment variables instead of config file
   - **proxmox.sh**: Executed on Proxmox host to create base templates. Accepts CLI parameters:
     - `--vmid=NUM`: Starting VMID (default: 800)
     - `--storage=NAME`: Storage pool name (default: local-lvm)
     - `--build=LIST`: Comma-separated distro list (default: all enabled)
+    - `--rebuild`: Delete existing VMs before building (safe by default without this flag)
   - **proxmox-updated.sh**: Alias/copy of proxmox.sh for reference
 
 - **Packer/**
@@ -205,7 +207,7 @@ The `build.sh` script is your main entry point and supports multiple modes and o
 ./Scripts/build.sh --ansible --packer
 ```
 
-**Build Specific Distros Only** (Via environment variables or --var-file):
+**Build Specific Distros Only** (Via environment variables or config file):
 ```bash
 export Download_Debian12=1
 export Download_Ubuntu2404=1
@@ -216,6 +218,18 @@ export Download_Ubuntu2404=1
 ```bash
 ./Scripts/build.sh --env
 # This will only create base templates via proxmox.sh, no Packer phase
+```
+
+**With Rebuild Flag** (Delete existing VMs before building - destructive):
+```bash
+./Scripts/build.sh --rebuild --env
+# Use this when you want to completely replace existing templates
+```
+
+**Without Rebuild Flag** (Safe - preserves existing VMs, default behavior):
+```bash
+./Scripts/build.sh --env
+# Existing VMs at target VMIDs are NOT deleted, so existing templates are preserved
 ```
 
 ### proxmox.sh Script
@@ -246,6 +260,14 @@ cd /root
   - Individual: `debian11`, `debian12`, `debian13`, `ubuntu2204`, `ubuntu2404`, `ubuntu2504`, `fedora41`, `rocky9`
   - Groups: `debian` (all Debian), `ubuntu` (all Ubuntu), `rhel` (Fedora/Rocky)
   - Example: `--build=debian12,ubuntu2404,fedora41`
+- `--rebuild`: Delete existing VMs at target VMIDs before building (destructive operation)
+  - **Without this flag (default)**: Existing VMs are preserved, preventing accidental deletion
+  - **With this flag**: Old VMs are destroyed before creating new ones
+
+**Example with rebuild**:
+```bash
+./proxmox.sh --vmid=800 --storage=local-lvm --build=debian12,ubuntu2404 --rebuild
+```
 
 ### Ansible Playbooks
 
