@@ -130,6 +130,7 @@ fi
 # Handle interactive mode
 if [ "$INTERACTIVE_MODE" = true ]; then
     echo "=== Interactive Mode ==="
+    echo ""
     
     # Ask about deployment mode
     read -p "Use Ansible only (skip SSH to Proxmox)? (y/n): " -r choice_ansible
@@ -149,18 +150,8 @@ if [ "$INTERACTIVE_MODE" = true ]; then
         REBUILD=true
     fi
     
-    # Ask for configuration file path
-    read -p "Path to config file (press Enter for default './Options.ini'): " -r config_file_input
-    if [ -n "$config_file_input" ]; then
-        CONFIG_FILE="$config_file_input"
-        USE_ENV_VARS=false
-    else
-        # Ask if user wants to use environment variables instead
-        read -p "Use environment variables instead of config file? (y/n): " -r choice_env
-        if [[ "$choice_env" =~ ^[Yy]$ ]]; then
-            USE_ENV_VARS=true
-        fi
-    fi
+    echo ""
+    echo "Infrastructure Configuration:"
     
     # Ask for Proxmox connection details if not using Ansible
     if [ "$USE_ANSIBLE" = false ]; then
@@ -217,6 +208,8 @@ if [ "$INTERACTIVE_MODE" = true ]; then
         fi
     fi
     
+    # Set flag to skip config file loading
+    USE_ENV_VARS=true
     echo ""
 fi
 
@@ -410,6 +403,9 @@ else
             exit 1
         fi
         
+        # Create working directory on remote host
+        ssh -i "$SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" mkdir -p ./workingdir
+        
         scp -i "$SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no ./Scripts/proxmox.sh $PROXMOX_SSH_USER@$PROXMOX_HOST:./workingdir
         # SSH to the remote host and run proxmox.sh with arguments
         ssh -i "$SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" << EOF
@@ -419,6 +415,9 @@ EOF
     else
         # Using password authentication
         echo "Starting build using password authentication"
+        # Create working directory on remote host
+        sshpass -p "$PROXMOX_SSH_PASSWORD" ssh -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@$PROXMOX_HOST mkdir -p ./workingdir
+        
         # Copy files to the remote host
         sshpass -p "$PROXMOX_SSH_PASSWORD" scp -o StrictHostKeyChecking=no ./Scripts/proxmox.sh $PROXMOX_SSH_USER@$PROXMOX_HOST:./workingdir
         # SSH to the remote host and run proxmox.sh with arguments
