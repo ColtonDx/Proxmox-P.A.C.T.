@@ -338,6 +338,11 @@ else
         PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --rebuild"
     fi
     
+    # Add packer-enabled flag if Packer will be run
+    if [ "$RUN_PACKER" = true ]; then
+        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --packer-enabled"
+    fi
+    
     # Build --build argument based on which distros are enabled
     BUILD_LIST=""
     [ "$Download_DEBIAN_11" = "Y" ] && BUILD_LIST="${BUILD_LIST}debian11,"
