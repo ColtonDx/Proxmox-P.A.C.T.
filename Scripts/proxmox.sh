@@ -20,7 +20,7 @@ create_template() {
             qm set "$1" --scsi0 "${5}:0,import-from=/root/workingdir/$3,discard=on"  > /dev/null 2>&1
             qm set "$1" --boot order=scsi0 --scsihw virtio-scsi-single
             qm set "$1" --agent enabled=1,fstrim_cloned_disks=1
-            qm set "$1" --ide2 "${5}:cloudinit"
+            qm set "$1" --ide3 "${5}:cloudinit"
             qm disk resize "$1" scsi0 8G
             qm template "$1"
         }
