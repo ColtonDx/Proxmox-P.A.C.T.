@@ -71,6 +71,15 @@ if [ "$Download_UBUNTU_2404" == "Y" ]; then
     create_template $((nVMID + 12)) "Template-Ubuntu-2404" "ubuntu-2404-template.img" "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img" "$PROXMOX_STORAGE_POOL"
 fi
 
+# Ubuntu 2504
+if [ "$Download_UBUNTU_2504" == "Y" ]; then
+    qm destroy $((nVMID + 113))
+    qm destroy $((nVMID + 13))    
+    
+    echo "Creating base Ubuntu 2504 Template"
+    create_template $((nVMID + 13)) "Template-Ubuntu-2504" "ubuntu-2504-template.img" "https://cloud-images.ubuntu.com/releases/plucky/release/ubuntu-25.04-server-cloudimg-amd64.img" "$PROXMOX_STORAGE_POOL"
+fi
+
 # Fedora 41
 if [ "$Download_FEDORA_41" == "Y" ]; then
     qm destroy $((nVMID + 121))

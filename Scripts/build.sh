@@ -49,6 +49,11 @@ start_packer() {
         packer_build ubuntu2404.pkr.hcl $((nVMID + 112))
     fi
 
+    # Ubuntu 2504
+    if [ "$Download_UBUNTU_2504" == "Y" ]; then
+        packer_build ubuntu2504.pkr.hcl $((nVMID + 113))
+    fi
+
     # Fedora 41
     if [ "$Download_FEDORA_41" == "Y" ]; then
         packer_build fedora41.pkr.hcl $((nVMID + 121))
@@ -171,26 +176,25 @@ EOF
 # Checking if we are using Pubkey authentication, then starting build
 elif [ "$PROXMOX_SSH_AUTH_METHOD" = "pubkey" ]; then
     echo "Starting build using public key authentication"
-    # Write private key to a secure temp file and ensure it's removed on exit
-    TMP_KEY="$(mktemp --tmpdir id_rsa.XXXXXX)"
-    printf '%s\n' "$PROXMOX_SSH_PRIVATE_KEY" > "$TMP_KEY"
-    chmod 600 "$TMP_KEY"
-    trap 'rm -f "$TMP_KEY"' EXIT
+    # Verify private key file exists
+    if [ ! -f "$PROXMOX_SSH_PRIVATE_KEY_PATH" ]; then
+        echo "Private key file not found: $PROXMOX_SSH_PRIVATE_KEY_PATH" >&2
+        exit 1
+    fi
 
-    scp -i "$TMP_KEY" -o StrictHostKeyChecking=no ./Options.ini ./Scripts/proxmox.sh ./Scripts/cleanup.sh $PROXMOX_SSH_USER@$PROXMOX_HOST:./workingdir
+    scp -i "$PROXMOX_SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no ./Options.ini ./Scripts/proxmox.sh ./Scripts/cleanup.sh $PROXMOX_SSH_USER@$PROXMOX_HOST:./workingdir
     # SSH to the remote host and run proxmox.sh
-    ssh -i "$TMP_KEY" -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" << 'EOF'
+    ssh -i "$PROXMOX_SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" << 'EOF'
     chmod +x ./workingdir/proxmox.sh
     ./workingdir/proxmox.sh
 EOF
 
     start_packer
     # SSH to the remote host and run cleanup.sh
-    ssh -i "$TMP_KEY" -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" << 'EOF'
+    ssh -i "$PROXMOX_SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" << 'EOF'
     chmod +x ./workingdir/cleanup.sh    
     ./workingdir/cleanup.sh
 EOF
-    # TMP_KEY will be removed by the EXIT trap
 
 else
     echo "Unknown authentication method: $PROXMOX_SSH_AUTH_METHOD - Exiting"
