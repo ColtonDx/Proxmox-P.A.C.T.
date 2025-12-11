@@ -2,9 +2,6 @@
 
 #This is the script that will be run on the Proxmox server to create the VM templates.
 
-# Load configuration file
-source ./workingdir/Options.ini
-
 # --- CLI parameter handling ---
 # Defaults if not provided on the command line
 DEFAULT_VMID=800

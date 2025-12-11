@@ -109,13 +109,14 @@ done
 if [ "$USE_ENV_VARS" = true ]; then
     echo "Loading variables from environment variables..."
 else
-    # Load config file (default or custom)
-    if [ ! -f "$CONFIG_FILE" ]; then
-        echo "Missing required file: $CONFIG_FILE" >&2
-        exit 1
+    # Load config file if it exists (default or custom)
+    if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
+        echo "Loading variables from config file: $CONFIG_FILE"
+        # shellcheck disable=SC1090
+        source "$CONFIG_FILE"
+    else
+        echo "Config file not found or not specified. Using defaults and environment variables."
     fi
-    # shellcheck disable=SC1090
-    source "$CONFIG_FILE"
 fi
 
 # Set defaults for unset variables
