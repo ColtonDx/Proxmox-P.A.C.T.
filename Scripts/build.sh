@@ -49,14 +49,9 @@ start_packer() {
         packer_build ubuntu2404.pkr.hcl $((nVMID + 112))
     fi
 
-    # Fedora 39
-    if [ "$Download_FEDORA_39" == "Y" ]; then
-        packer_build fedora39.pkr.hcl $((nVMID + 121))
-    fi
-
-    # Fedora 40
-    if [ "$Download_FEDORA_40" == "Y" ]; then
-        packer_build fedora40.pkr.hcl $((nVMID + 122))
+    # Fedora 41
+    if [ "$Download_FEDORA_41" == "Y" ]; then
+        packer_build fedora41.pkr.hcl $((nVMID + 121))
     fi
 
     # Rocky Linux 9

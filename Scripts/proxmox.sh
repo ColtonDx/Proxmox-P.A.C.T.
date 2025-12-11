@@ -71,22 +71,13 @@ if [ "$Download_UBUNTU_24_04" == "Y" ]; then
     create_template $((nVMID + 12)) "Template-Ubuntu-24.04" "ubuntu-24.04-template.img" "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img" "$PROXMOX_STORAGE_POOL"
 fi
 
-# Fedora 39
-if [ "$Download_FEDORA_39" == "Y" ]; then
+# Fedora 41
+if [ "$Download_FEDORA_41" == "Y" ]; then
     qm destroy $((nVMID + 121))
     qm destroy $((nVMID + 21))    
     
-    echo "Creating base Fedora 39 Template"
-    create_template $((nVMID + 21)) "Template-Fedora-39" "fedora-39-template.qcow2" "https://fedora.mirror.constant.com/fedora/linux/releases/39/Cloud/x86_64/images/Fedora-Cloud-Base-39-1.5.x86_64.qcow2" "$PROXMOX_STORAGE_POOL"
-fi
-
-# Fedora 40
-if [ "$Download_FEDORA_40" == "Y" ]; then
-    qm destroy $((nVMID + 122))
-    qm destroy $((nVMID + 22))
-
-    echo "Creating base Fedora 40 Template"
-    create_template $((nVMID + 22)) "Template-Fedora-40" "fedora-40-template.qcow2" "https://download.fedoraproject.org/pub/fedora/linux/releases/40/Cloud/x86_64/images/Fedora-Cloud-Base-Generic.x86_64-40-1.14.qcow2" "$PROXMOX_STORAGE_POOL"
+    echo "Creating base Fedora 41 Template"
+    create_template $((nVMID + 21)) "Template-Fedora-41" "fedora-41-template.qcow2" "https://fedora.mirror.constant.com/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2" "$PROXMOX_STORAGE_POOL"
 fi
 
 # Rocky Linux 9

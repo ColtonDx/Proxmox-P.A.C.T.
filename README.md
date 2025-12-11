@@ -134,8 +134,7 @@ Coming Soon...
 - Debian 13
 - Ubuntu 22.04
 - Ubuntu 24.04
-- Fedora 39
-- Fedora 40
+- Fedora 41 (Fedora 39 and 40 are no longer supported)
 - Rocky Linux 9
 - CentOS 9
 
