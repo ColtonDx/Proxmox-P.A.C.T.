@@ -123,6 +123,7 @@ fi
 : "${PROXMOX_SSH_AUTH_METHOD:=password}"
 : "${PROXMOX_SSH_USER:=root}"
 : "${PROXMOX_HOST:=pve.local}"
+: "${PROXMOX_HOST_NODE:=pve}"
 : "${PROXMOX_STORAGE_POOL:=local-lvm}"
 : "${nVMID:=800}"
 
@@ -161,11 +162,25 @@ if [ "$INTERACTIVE_MODE" = true ]; then
         fi
     fi
     
-    # Ask for SSH key path if not using Ansible
+    # Ask for Proxmox connection details if not using Ansible
     if [ "$USE_ANSIBLE" = false ]; then
+        read -p "Proxmox host (press Enter for default 'pve.local'): " -r proxmox_host_input
+        if [ -n "$proxmox_host_input" ]; then
+            PROXMOX_HOST="$proxmox_host_input"
+        fi
+        
+        read -p "SSH user (press Enter for default 'root'): " -r ssh_user_input
+        if [ -n "$ssh_user_input" ]; then
+            PROXMOX_SSH_USER="$ssh_user_input"
+        fi
+        
         read -p "SSH private key path (press Enter for password authentication): " -r ssh_key_input
         if [ -n "$ssh_key_input" ]; then
             SSH_PRIVATE_KEY_PATH="$ssh_key_input"
+        else
+            # Ask for SSH password if not using key
+            read -sp "SSH password: " -r PROXMOX_SSH_PASSWORD
+            echo ""
         fi
     fi
     
@@ -179,6 +194,27 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     read -p "Storage pool (press Enter for default 'local-lvm'): " -r storage_input
     if [ -n "$storage_input" ]; then
         PROXMOX_STORAGE_POOL="$storage_input"
+    fi
+    
+    # Ask for Packer-specific variables if Packer is enabled
+    if [ "$RUN_PACKER" = true ]; then
+        echo ""
+        echo "Packer Configuration:"
+        read -p "Proxmox API Token ID: " -r packer_token_id_input
+        if [ -n "$packer_token_id_input" ]; then
+            PACKER_TOKEN_ID="$packer_token_id_input"
+        fi
+        
+        read -sp "Proxmox API Token Secret: " -r packer_token_secret_input
+        echo ""
+        if [ -n "$packer_token_secret_input" ]; then
+            PACKER_TOKEN_SECRET="$packer_token_secret_input"
+        fi
+        
+        read -p "Proxmox Host Node (press Enter for default 'pve'): " -r proxmox_host_node_input
+        if [ -n "$proxmox_host_node_input" ]; then
+            PROXMOX_HOST_NODE="$proxmox_host_node_input"
+        fi
     fi
     
     echo ""
