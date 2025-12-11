@@ -38,13 +38,13 @@ start_packer() {
         packer_build debian13.pkr.hcl $((nVMID + 103))
     fi
 
-    # Ubuntu 22.04 LTS
-    if [ "$Download_UBUNTU_22_04_LTS" == "Y" ]; then
+    # Ubuntu 2204
+    if [ "$Download_UBUNTU_2204" == "Y" ]; then
         packer_build ubuntu2204.pkr.hcl $((nVMID + 111))
     fi
 
-    # Ubuntu 24.04
-    if [ "$Download_UBUNTU_24_04" == "Y" ]; then
+    # Ubuntu 2404
+    if [ "$Download_UBUNTU_2404" == "Y" ]; then
 
         packer_build ubuntu2404.pkr.hcl $((nVMID + 112))
     fi

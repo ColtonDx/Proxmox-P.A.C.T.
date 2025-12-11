@@ -59,9 +59,9 @@ source "proxmox-clone" "Ubuntu2404" {
     # VM General Settings
     node = "${var.proxmox_host_node}"
     vm_id = "${var.vmid}"
-    vm_name   = "PACT-Ubuntu-24.04"
+    vm_name   = "PACT-Ubuntu-2404"
     template_description = "An Image Customized by Packer. Build Date: ${local.build_time}"
-    clone_vm = "Template-Ubuntu-24.04"
+    clone_vm = "Template-Ubuntu-2404"
     ssh_username = "root"
     qemu_agent = true
 

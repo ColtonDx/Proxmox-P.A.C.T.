@@ -53,22 +53,22 @@ if [ "$Download_DEBIAN_13" == "Y" ]; then
     create_template $((nVMID + 3)) "Template-Debian-13" "debian-13-template.qcow2" "https://cloud.debian.org/images/cloud/trixie/daily/latest/debian-13-genericcloud-amd64-daily.qcow2" "$PROXMOX_STORAGE_POOL"
 fi
 
-# Ubuntu 22.04 LTS
-if [ "$Download_UBUNTU_22_04_LTS" == "Y" ]; then
+# Ubuntu 2204
+if [ "$Download_UBUNTU_2204" == "Y" ]; then
     qm destroy $((nVMID + 111))
     qm destroy $((nVMID + 11))
     
-    echo "Creating base Ubuntu 22.04 Template"
-    create_template $((nVMID + 11)) "Template-Ubuntu-22.04" "ubuntu-22.04-template.img" "https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img" "$PROXMOX_STORAGE_POOL"
+    echo "Creating base Ubuntu 2204 Template"
+    create_template $((nVMID + 11)) "Template-Ubuntu-2204" "ubuntu-2204-template.img" "https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img" "$PROXMOX_STORAGE_POOL"
  fi
 
-# Ubuntu 24.04
-if [ "$Download_UBUNTU_24_04" == "Y" ]; then
+# Ubuntu 2404
+if [ "$Download_UBUNTU_2404" == "Y" ]; then
     qm destroy $((nVMID + 112))
     qm destroy $((nVMID + 12))    
     
-    echo "Creating base Ubuntu 24.04 Template"
-    create_template $((nVMID + 12)) "Template-Ubuntu-24.04" "ubuntu-24.04-template.img" "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img" "$PROXMOX_STORAGE_POOL"
+    echo "Creating base Ubuntu 2404 Template"
+    create_template $((nVMID + 12)) "Template-Ubuntu-2404" "ubuntu-2404-template.img" "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img" "$PROXMOX_STORAGE_POOL"
 fi
 
 # Fedora 41
