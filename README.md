@@ -37,9 +37,8 @@ On the Host
   - **Variables/**: Variables configuration file for Packer. Not currently in use by the default build, however there is a vars.json file in here that you can add variables to and will be imported into each packer build, makes for easier customization.
 
 - **Ansible/**
-  - **Playbooks/**: Contains Ansible playbooks for baseline configuration. The default playbooks have commented out examples of what you can do with it, the only thing the default playbooks do is update the Guest OS.
-  - **Variables/**: Contains the variables file for adding your custom user accounts, public keys, or other customizations to your playbooks.
-      - **motd/**: Contains files to be downloaded by the script to add some custom MOTD such as showing VM stats when you log in via SSH.
+  - **Playbooks/**: Contains Ansible playbooks for baseline configuration. The `generic.yml` playbook is used by all Packer templates and automatically detects the OS family (Debian/Ubuntu or RHEL/Fedora/CentOS) to apply the appropriate package manager and updates.
+  - **Variables/**: Contains the variables file for customizing your playbooks.
 
 ## Getting Started
 
@@ -173,7 +172,7 @@ Coming Soon...
 - Ubuntu 2204
 - Ubuntu 2404
 - Ubuntu 2504
-- Fedora 41 (Fedora 39 and 40 are no longer supported)
+- Fedora 41
 - Rocky Linux 9
 - CentOS 9
 

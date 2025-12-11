@@ -109,7 +109,7 @@ build {
     }
 
     provisioner "ansible" {
-      playbook_file = "./Ansible/Playbooks/debian13.yml"
+      playbook_file = "./Ansible/Playbooks/generic.yml"
       use_proxy = false
       extra_arguments = ["-e", "@./Ansible/Variables/vars.yml"]
     }
