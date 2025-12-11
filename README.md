@@ -41,6 +41,44 @@ On the Host
   - **Variables/**: Contains the variables file for adding your custom user accounts, public keys, or other customizations to your playbooks.
       - **motd/**: Contains files to be downloaded by the script to add some custom MOTD such as showing VM stats when you log in via SSH.
 
+## Getting Started
+
+### Quick Setup
+
+1. **Clone the Repository**
+
+   ```bash
+   git clone https://github.com/ColtonDx/Proxmox-P.A.C.T.git
+   cd Proxmox-P.A.C.T
+   ```
+
+2. **Create Environment Configuration Files**
+
+   Edit `Options.ini` with your Proxmox settings (nVMID, storage pool, host information).
+
+   Edit `.env.local` with your authentication credentials:
+   - For password authentication: Set `PROXMOX_SSH_AUTH_METHOD="password"` and `PROXMOX_SSH_PASSWORD`
+   - For key-based authentication: Set `PROXMOX_SSH_AUTH_METHOD="pubkey"` and `PROXMOX_SSH_PRIVATE_KEY_PATH` to point to your private key file
+
+3. **Make the Build Script Executable**
+
+   ```bash
+   chmod +x ./Scripts/build.sh
+   ```
+
+4. **Run the Build Script**
+
+   ```bash
+   sudo ./Scripts/build.sh
+   ```
+
+   The script will automatically:
+   - Install required packages (Packer, Ansible, etc.)
+   - Connect to your Proxmox host via SSH
+   - Create base templates on Proxmox
+   - Customize templates with Packer and Ansible
+   - Convert customized VMs to templates
+
 ## Prerequisites
 
 1. Make sure that you have a user account for Packer to use in Proxmox VE
@@ -57,10 +95,10 @@ On the Host
     - **VMID 801 | 901**: Debian 11
     - **VMID 802 | 902**: Debian 12 
     - **VMID 803 | 903**: Debian 13
-    - **VMID 811 | 911**: Ubuntu 22.04
-    - **VMID 812 | 912**: Ubuntu 24.04
-    - **VMID 821 | 921**: Fedora 39
-    - **VMID 822 | 922**: Fedora 40
+    - **VMID 811 | 911**: Ubuntu 2204
+    - **VMID 812 | 912**: Ubuntu 2404
+    - **VMID 813 | 913**: Ubuntu 2504
+    - **VMID 821 | 921**: Fedora 41
     - **VMID 831 | 931**: Rocky 9
 
    <b> PROXMOX_SSH_AUTH_METHOD </b>
@@ -132,8 +170,9 @@ Coming Soon...
 - Debian 11
 - Debian 12
 - Debian 13
-- Ubuntu 22.04
-- Ubuntu 24.04
+- Ubuntu 2204
+- Ubuntu 2404
+- Ubuntu 2504
 - Fedora 41 (Fedora 39 and 40 are no longer supported)
 - Rocky Linux 9
 - CentOS 9
