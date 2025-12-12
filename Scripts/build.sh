@@ -76,6 +76,16 @@ BUILD_TEMPLATES=""
 PACKER_TOKEN_ID=""
 PACKER_TOKEN_SECRET=""
 
+# Initialize distro flags (BEFORE sourcing answerfile so answerfile can override)
+Download_DEBIAN_11="N"
+Download_DEBIAN_12="N"
+Download_DEBIAN_13="N"
+Download_UBUNTU_2204="N"
+Download_UBUNTU_2404="N"
+Download_UBUNTU_2504="N"
+Download_FEDORA_41="N"
+Download_ROCKY_LINUX_9="N"
+
 # Source answerfile if it exists (.env.local)
 # This allows users to pre-configure variables instead of using CLI args or interactive mode
 # Answerfile values are loaded here and can be overridden by CLI arguments below
@@ -210,16 +220,6 @@ fi
 : "${PROXMOX_HOST_NODE:=pve}"
 : "${PROXMOX_STORAGE_POOL:=local-lvm}"
 : "${nVMID:=800}"
-
-# Initialize distro flags
-Download_DEBIAN_11="N"
-Download_DEBIAN_12="N"
-Download_DEBIAN_13="N"
-Download_UBUNTU_2204="N"
-Download_UBUNTU_2404="N"
-Download_UBUNTU_2504="N"
-Download_FEDORA_41="N"
-Download_ROCKY_LINUX_9="N"
 
 # Parse BUILD_TEMPLATES from CLI if provided
 if [ -n "$BUILD_TEMPLATES" ]; then
