@@ -328,7 +328,64 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
   --packer
 ```
 
+#### Answerfile Mode
 
+For repeatable configurations or team environments, use an answerfile (.env.local) to store your settings:
+
+1. **Copy the sample answerfile**:
+   ```bash
+   cp .env.local.sample .env.local
+   ```
+
+2. **Edit `.env.local` with your settings**:
+   ```bash
+   nano .env.local
+   ```
+
+   Key parameters:
+   - `PROXMOX_HOST` - Proxmox hostname or IP
+   - `PROXMOX_HOST_NODE` - Node name (usually "pve")
+   - `PROXMOX_SSH_USER` - SSH username (usually "root")
+   - `PROXMOX_SSH_PASSWORD` - SSH password (or leave empty to use key)
+   - `SSH_PRIVATE_KEY_PATH` - Path to SSH key file (optional, instead of password)
+   - `PROXMOX_STORAGE_POOL` - Storage pool name
+   - `nVMID` - Starting VMID
+   - `BUILD_TEMPLATES` - Which templates ("all", "debian", "ubuntu", or comma-separated names)
+   - `RUN_PACKER` - Enable Packer customization (true/false)
+   - `PACKER_TOKEN_ID` - Proxmox API Token ID (if using Packer)
+   - `PACKER_TOKEN_SECRET` - Proxmox API Token Secret (if using Packer)
+   - Plus many more customization options (see `.env.local.sample` for full list)
+
+3. **Run the script normally** - it will automatically load `.env.local`:
+   ```bash
+   ./Scripts/build.sh
+   ```
+
+   **Benefits of answerfile mode**:
+   - Pre-configured settings ready to use
+   - No interactive prompts needed
+   - Easy to version control (with secrets protected)
+   - Perfect for CI/CD pipelines or team environments
+   - CLI arguments can still override answerfile values if needed
+
+**Example `.env.local` file**:
+```bash
+# Copy this file to .env.local and customize for your environment
+PROXMOX_HOST="pve.local"
+PROXMOX_HOST_NODE="pve"
+PROXMOX_SSH_USER="root"
+PROXMOX_SSH_PASSWORD="your_password_here"
+SSH_PRIVATE_KEY_PATH=""
+PROXMOX_STORAGE_POOL="local-lvm"
+nVMID=800
+USE_ANSIBLE=false
+RUN_PACKER=true
+PACKER_TOKEN_ID="packer@pam!packer_token"
+PACKER_TOKEN_SECRET="your_token_secret"
+BUILD_TEMPLATES="all"
+REBUILD=false
+CLEANUP_BUILD_VMS=true
+```
 
 **Examples**:
 

@@ -55,6 +55,13 @@
 ################### CLI OPTION PARSING
 #####################################################################################
 
+# Source answerfile if it exists (.env.local)
+# This allows users to pre-configure variables instead of using CLI args or interactive mode
+if [ -f ".env.local" ]; then
+    echo "Loading configuration from .env.local..."
+    source .env.local
+fi
+
 # Default flags and values
 USE_ANSIBLE=false
 RUN_PACKER=false
