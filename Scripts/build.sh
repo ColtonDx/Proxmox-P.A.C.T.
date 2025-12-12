@@ -144,61 +144,118 @@ if [ "$INTERACTIVE_MODE" = true ]; then
         RUN_PACKER=true
     fi
     
-    # Ask about rebuild
-    read -p "Delete existing VMs before building (rebuild)? (y/n): " -r choice_rebuild
+    # Ask which images to build
+    echo ""
+    echo "Select images to create templates from:"
+    echo "  Available: all, debian, ubuntu, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9"
+    
+    # Keep asking until valid input is provided
+    BUILD_IMAGES_VALID=false
+    while [ "$BUILD_IMAGES_VALID" = false ]; do
+        read -p "Enter comma-separated list (or 'all' for all images) [Default: all]: " -r build_images_input
+        if [ -z "$build_images_input" ]; then
+            BUILD_IMAGES="all"
+        else
+            BUILD_IMAGES="$build_images_input"
+        fi
+        
+        # Initialize all to N
+        Download_DEBIAN_11="N"
+        Download_DEBIAN_12="N"
+        Download_DEBIAN_13="N"
+        Download_UBUNTU_2204="N"
+        Download_UBUNTU_2404="N"
+        Download_UBUNTU_2504="N"
+        Download_FEDORA_41="N"
+        Download_ROCKY_LINUX_9="N"
+        
+        # Parse the input
+        if [ "$BUILD_IMAGES" = "all" ]; then
+            Download_DEBIAN_11="Y"
+            Download_DEBIAN_12="Y"
+            Download_DEBIAN_13="Y"
+            Download_UBUNTU_2204="Y"
+            Download_UBUNTU_2404="Y"
+            Download_UBUNTU_2504="Y"
+            Download_FEDORA_41="Y"
+            Download_ROCKY_LINUX_9="Y"
+            BUILD_IMAGES_VALID=true
+        else
+            # Parse comma-separated list
+            items="$(echo "$BUILD_IMAGES" | tr ',' ' ')"
+            INVALID_ITEMS=""
+            for it in $items; do
+                case "$it" in
+                    debian)
+                        Download_DEBIAN_11="Y"
+                        Download_DEBIAN_12="Y"
+                        Download_DEBIAN_13="Y"
+                        ;;
+                    debian11) Download_DEBIAN_11="Y" ;;
+                    debian12) Download_DEBIAN_12="Y" ;;
+                    debian13) Download_DEBIAN_13="Y" ;;
+                    ubuntu)
+                        Download_UBUNTU_2204="Y"
+                        Download_UBUNTU_2404="Y"
+                        Download_UBUNTU_2504="Y"
+                        ;;
+                    ubuntu2204) Download_UBUNTU_2204="Y" ;;
+                    ubuntu2404) Download_UBUNTU_2404="Y" ;;
+                    ubuntu2504) Download_UBUNTU_2504="Y" ;;
+                    fedora41) Download_FEDORA_41="Y" ;;
+                    rocky9) Download_ROCKY_LINUX_9="Y" ;;
+                    *) INVALID_ITEMS="$INVALID_ITEMS $it" ;;
+                esac
+            done
+            
+            if [ -n "$INVALID_ITEMS" ]; then
+                echo "Error: Unknown image(s):$INVALID_ITEMS"
+                echo "Please try again with valid images."
+            else
+                BUILD_IMAGES_VALID=true
+            fi
+        fi
+    done
+    
+    # Calculate VMIDs for selected distros
+    declare -a SELECTED_VMIDS
+    SELECTED_VMIDS=()
+    [ "$Download_DEBIAN_11" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 1))")
+    [ "$Download_DEBIAN_12" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 2))")
+    [ "$Download_DEBIAN_13" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 3))")
+    [ "$Download_UBUNTU_2204" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 11))")
+    [ "$Download_UBUNTU_2404" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 12))")
+    [ "$Download_UBUNTU_2504" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 13))")
+    [ "$Download_FEDORA_41" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 21))")
+    [ "$Download_ROCKY_LINUX_9" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 31))")
+    
+    # Add packer VMIDs if packer is enabled
+    if [ "$RUN_PACKER" = true ]; then
+        declare -a PACKER_VMIDS
+        PACKER_VMIDS=()
+        [ "$Download_DEBIAN_11" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 101))")
+        [ "$Download_DEBIAN_12" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 102))")
+        [ "$Download_DEBIAN_13" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 103))")
+        [ "$Download_UBUNTU_2204" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 111))")
+        [ "$Download_UBUNTU_2404" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 112))")
+        [ "$Download_UBUNTU_2504" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 113))")
+        [ "$Download_FEDORA_41" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 121))")
+        [ "$Download_ROCKY_LINUX_9" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 131))")
+    fi
+    
+    # Ask about rebuild with VMID information
+    echo ""
+    echo "VMIDs that will be created:"
+    echo "  Base templates: ${SELECTED_VMIDS[*]}"
+    if [ "$RUN_PACKER" = true ]; then
+        echo "  Packer customized: ${PACKER_VMIDS[*]}"
+    fi
+    read -p "Delete existing VMs before building (rebuild)? (Y/N) [Default: No]: " -r choice_rebuild
     if [[ "$choice_rebuild" =~ ^[Yy]$ ]]; then
         REBUILD=true
     fi
     
-    # Ask which images to build
-    echo ""
-    echo "Select images to create templates from:"
-    echo "  Available: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9"
-    read -p "Enter comma-separated list (or 'all' for all images) [Default: all]: " -r build_images_input
-    if [ -n "$build_images_input" ]; then
-        BUILD_IMAGES="$build_images_input"
-    else
-        BUILD_IMAGES="all"
-    fi
-    
-    # Parse selected images
-    Download_DEBIAN_11="N"
-    Download_DEBIAN_12="N"
-    Download_DEBIAN_13="N"
-    Download_UBUNTU_2204="N"
-    Download_UBUNTU_2404="N"
-    Download_UBUNTU_2504="N"
-    Download_FEDORA_41="N"
-    Download_ROCKY_LINUX_9="N"
-    
-    if [ "$BUILD_IMAGES" = "all" ]; then
-        Download_DEBIAN_11="Y"
-        Download_DEBIAN_12="Y"
-        Download_DEBIAN_13="Y"
-        Download_UBUNTU_2204="Y"
-        Download_UBUNTU_2404="Y"
-        Download_UBUNTU_2504="Y"
-        Download_FEDORA_41="Y"
-        Download_ROCKY_LINUX_9="Y"
-    else
-        # Parse comma-separated list
-        items="$(echo "$BUILD_IMAGES" | tr ',' ' ')"
-        for it in $items; do
-            case "$it" in
-                debian11) Download_DEBIAN_11="Y" ;;
-                debian12) Download_DEBIAN_12="Y" ;;
-                debian13) Download_DEBIAN_13="Y" ;;
-                ubuntu2204) Download_UBUNTU_2204="Y" ;;
-                ubuntu2404) Download_UBUNTU_2404="Y" ;;
-                ubuntu2504) Download_UBUNTU_2504="Y" ;;
-                fedora41) Download_FEDORA_41="Y" ;;
-                rocky9) Download_ROCKY_LINUX_9="Y" ;;
-                *) echo "Warning: unknown image '$it' - ignoring" ;;
-            esac
-        done
-    fi
-    
-    echo ""
+        echo ""
     echo "Infrastructure Configuration:"
     
     # Ask for Proxmox connection details if not using Ansible
