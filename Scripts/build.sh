@@ -265,16 +265,7 @@ if [ "$INTERACTIVE_MODE" = true ]; then
         PROXMOX_STORAGE_POOL="$storage_input"
     fi
     
-    # Ask about rebuild with VMID information
-    echo ""
-    echo "VMIDs that will be created:"
-    echo "  Base templates: ${SELECTED_VMIDS[*]}"
-    read -p "Delete existing VMs before building (rebuild)? (Y/N) [Default: No]: " -r choice_rebuild
-    if [[ "$choice_rebuild" =~ ^[Yy]$ ]]; then
-        REBUILD=true
-    fi
-    
-    # Ask about Packer
+    # Ask about Packer before rebuild so we can show all VMIDs
     echo ""
     read -p "Modify Templates with Packer? (Y/N) [Default: No]: " -r choice_packer
     if [[ "$choice_packer" =~ ^[Yy]$ ]]; then
@@ -291,9 +282,33 @@ if [ "$INTERACTIVE_MODE" = true ]; then
         [ "$Download_UBUNTU_2504" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 113))")
         [ "$Download_FEDORA_41" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 121))")
         [ "$Download_ROCKY_LINUX_9" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 131))")
-        
-        echo "  Packer customized: ${PACKER_VMIDS[*]}"
-        
+    fi
+    
+    # Ask about rebuild with ALL VMID information displayed
+    echo ""
+    echo "VMIDs that will be created:"
+    if [ "$RUN_PACKER" = true ]; then
+        # Display base templates with asterisk
+        base_vmids_display=""
+        for vmid in "${SELECTED_VMIDS[@]}"; do
+            if [ -z "$base_vmids_display" ]; then
+                base_vmids_display="${vmid}*"
+            else
+                base_vmids_display="$base_vmids_display ${vmid}*"
+            fi
+        done
+        echo "  Base templates: $base_vmids_display ${PACKER_VMIDS[*]}"
+        echo "  * VMs will be created temporarily during the provisioning process"
+    else
+        echo "  Base templates: ${SELECTED_VMIDS[*]}"
+    fi
+    read -p "Delete existing VMs before building (rebuild)? (Y/N) [Default: No]: " -r choice_rebuild
+    if [[ "$choice_rebuild" =~ ^[Yy]$ ]]; then
+        REBUILD=true
+    fi
+    
+    # If Packer is enabled, ask for Packer configuration
+    if [ "$RUN_PACKER" = true ]; then
         echo ""
         echo "Packer Configuration:"
         while [ -z "$PACKER_TOKEN_ID" ]; do
