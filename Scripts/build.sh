@@ -542,6 +542,9 @@ start_packer() {
         IFS='|' read -r var_name distro_name vmid_offset <<< "$distro"
         if [ "${!var_name}" == "Y" ]; then
             packer_build "$distro_name" $((nVMID + vmid_offset))
+            if [ $? -ne 0 ]; then
+                return 1
+            fi
         fi
     done
 }
@@ -554,7 +557,24 @@ packer_build() {
     local ansiblefile="${CUSTOM_ANSIBLE_PLAYBOOK:-./Ansible/Playbooks/image_customizations.yml}"
     local ansiblevarfile="${CUSTOM_ANSIBLE_VARFILE:-./Ansible/Variables/vars.yml}"
     
+    # Check if packerfile exists
+    if [ ! -f "$packerfile" ]; then
+        echo "Error: Packer template not found: $packerfile" >&2
+        return 1
+    fi
+    
+    # Check if vars.json exists
+    if [ ! -f "./Packer/Variables/vars.json" ]; then
+        echo "Error: Packer variables file not found: ./Packer/Variables/vars.json" >&2
+        return 1
+    fi
+    
     packer init "$packerfile"
+    if [ $? -ne 0 ]; then
+        echo "Error: Packer init failed" >&2
+        return 1
+    fi
+    
     packer build -var-file=./Packer/Variables/vars.json \
         -var "proxmox_host_node=$PROXMOX_HOST_NODE" \
         -var "proxmox_api_url=https://${PROXMOX_HOST}:8006/api2/json" \
@@ -566,6 +586,11 @@ packer_build() {
         -var "custom_ansible_playbook=$ansiblefile" \
         -var "custom_ansible_varfile=$ansiblevarfile" \
         "$packerfile"
+    
+    if [ $? -ne 0 ]; then
+        echo "Error: Packer build failed for $distro_name" >&2
+        return 1
+    fi
 }
 
 # Detect the distribution of the runner
@@ -600,22 +625,43 @@ if [ "$PROXMOX_IS_REMOTE" = true ]; then
     fi
 
     # Install packages based on distribution
+    echo "Installing required packages: $PACKAGES"
     case "$OS" in
         ubuntu|debian)
             sudo apt-get update > /dev/null 2>&1
-            sudo apt-get install -y $PACKAGES > /dev/null 2>&1
+            sudo apt-get install -y $PACKAGES
+            if [ $? -ne 0 ]; then
+                echo "Error: Failed to install packages. Please install manually: $PACKAGES" >&2
+                exit 1
+            fi
             ;;
         centos|rocky|almalinux|fedora|rhel)
-            sudo dnf install -y $PACKAGES > /dev/null 2>&1
+            sudo dnf install -y $PACKAGES
+            if [ $? -ne 0 ]; then
+                echo "Error: Failed to install packages. Please install manually: $PACKAGES" >&2
+                exit 1
+            fi
             ;;
         opensuse|sles)
-            sudo zypper install -y $PACKAGES > /dev/null 2>&1
+            sudo zypper install -y $PACKAGES
+            if [ $? -ne 0 ]; then
+                echo "Error: Failed to install packages. Please install manually: $PACKAGES" >&2
+                exit 1
+            fi
             ;;
         *)
             echo "Unsupported distribution: $OS"
             exit 1
             ;;
     esac
+fi
+
+# Verify sshpass is available if needed
+if [ "$PROXMOX_IS_REMOTE" = true ] && [ "$USE_ANSIBLE" = false ]; then
+    if ! command -v sshpass &> /dev/null; then
+        echo "Error: sshpass is required for SSH password authentication but is not installed" >&2
+        exit 1
+    fi
 fi
 
 # Install Packer only if --packer option is enabled (regardless of local or remote)
@@ -759,6 +805,10 @@ fi
 if [ "$RUN_PACKER" = true ]; then
     echo "Running Packer builds..."
     start_packer
+    if [ $? -ne 0 ]; then
+        echo "Error: Packer build failed" >&2
+        exit 1
+    fi
 else
     echo "Packer builds skipped"
 fi
