@@ -64,6 +64,12 @@ variable "distro" {
     description = "Distribution to build (debian11, debian12, debian13, ubuntu2204, ubuntu2205, ubuntu2404, ubuntu2504, fedora41, rocky9)"
 }
 
+variable "custom_ansible_playbook" {
+    type = string
+    default = "./Ansible/Playbooks/image_customizations.yml"
+    description = "Path to custom Ansible playbook for template customization"
+}
+
 # Locals for distro-specific configuration
 locals {
   distro_config = {
@@ -199,7 +205,7 @@ build {
 
     # Run Ansible playbook for customization
     provisioner "ansible" {
-        playbook_file = "./Ansible/Playbooks/generic.yml"
+        playbook_file = var.custom_ansible_playbook
         use_proxy = false
         extra_arguments = ["-e", "@./Ansible/Variables/vars.yml", "-e", "distro=${var.distro}"]
     }

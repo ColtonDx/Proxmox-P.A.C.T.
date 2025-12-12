@@ -46,7 +46,10 @@ INTERACTIVE_MODE=false
 SSH_PRIVATE_KEY_PATH=""
 PROXMOX_IS_REMOTE=true
 CUSTOM_PACKERFILE=""
+CUSTOM_ANSIBLE_PLAYBOOK=""
 BUILD_TEMPLATES=""
+PACKER_TOKEN_ID=""
+PACKER_TOKEN_SECRET=""
 
 print_usage() {
     cat <<EOF
@@ -65,6 +68,9 @@ Options:
   --local                    Run directly on Proxmox host (no SSH needed).
   --templates=LIST           Comma-separated list of templates to build (e.g., debian12,ubuntu2404).
   --custom-packerfile=PATH   Path to custom Packer template file instead of default.
+  --custom-ansible=PATH      Path to custom Ansible playbook for template customization.
+  --packer-token-id=TOKEN    Proxmox API Token ID for Packer (required with --packer).
+  --packer-token-secret=SEC  Proxmox API Token Secret for Packer (required with --packer).
   --help                     Show this help and exit
 
 Notes:
@@ -115,6 +121,15 @@ for arg in "$@"; do
             ;;
         --custom-packerfile=*)
             CUSTOM_PACKERFILE="${arg#*=}"
+            ;;
+        --custom-ansible=*)
+            CUSTOM_ANSIBLE_PLAYBOOK="${arg#*=}"
+            ;;
+        --packer-token-id=*)
+            PACKER_TOKEN_ID="${arg#*=}"
+            ;;
+        --packer-token-secret=*)
+            PACKER_TOKEN_SECRET="${arg#*=}"
             ;;
         --help)
             print_usage
@@ -408,6 +423,8 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     if [ "$RUN_PACKER" = true ]; then
         echo ""
         echo "Packer Configuration:"
+        
+        # Prompt for Packer Token ID only if not provided via CLI
         while [ -z "$PACKER_TOKEN_ID" ]; do
             read -p "Proxmox API Token ID (required): " -r packer_token_id_input
             if [ -n "$packer_token_id_input" ]; then
@@ -417,6 +434,7 @@ if [ "$INTERACTIVE_MODE" = true ]; then
             fi
         done
         
+        # Prompt for Packer Token Secret only if not provided via CLI
         while [ -z "$PACKER_TOKEN_SECRET" ]; do
             read -sp "Proxmox API Token Secret (required): " -r packer_token_secret_input
             echo ""
@@ -494,6 +512,7 @@ packer_build() {
     local distro_name="$1"
     local vmid="$2"
     local packerfile="${CUSTOM_PACKERFILE:-./Packer/Templates/universal.pkr.hcl}"
+    local ansiblefile="${CUSTOM_ANSIBLE_PLAYBOOK:-./Ansible/Playbooks/image_customizations.yml}"
     
     packer init "$packerfile"
     packer build -var-file=./Packer/Variables/vars.json \
@@ -504,6 +523,7 @@ packer_build() {
         -var "vmid=$vmid" \
         -var "storage_pool=$PROXMOX_STORAGE_POOL" \
         -var "distro=$distro_name" \
+        -var "custom_ansible_playbook=$ansiblefile" \
         "$packerfile"
 }
 

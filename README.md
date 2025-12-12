@@ -22,15 +22,17 @@ The workflow has three deployment modes for template creation:
    - Converts VMs to templates
    - Cleans up temporary resources
 
-### Ansible Mode
+### Ansible Mode (Alternative to SSH)
 1. **On your management machine**:
    - Installs Ansible dependencies
    - Executes `Ansible/Playbooks/create_templates.yml` which connects to Proxmox
-   - Ansible handles template creation based on `Create_*` flags in `Ansible/Variables/vars.yml`
+   - Ansible handles template creation instead of using proxmox.sh
 
 2. **On Proxmox** (via Ansible tasks):
    - Creates templates based on Ansible task configuration
    - More flexible for complex customizations
+
+**Note**: Using `--ansible` only affects how base templates are created (Ansible instead of SSH). It does NOT impact the optional Packer customization phase, which uses Ansible playbooks regardless of which template creation method was chosen.
 
 ### Standalone Mode (Direct on Proxmox)
 - Copy `proxmox.sh` directly to your Proxmox host
@@ -38,13 +40,13 @@ The workflow has three deployment modes for template creation:
 - No external dependencies needed on Proxmox
 
 ### Post-Template Customization (Optional)
+After base templates are created (regardless of whether SSH or Ansible mode was used), Packer can optionally customize templates:
+
 1. **Packer customization**:
    - `build.sh` with `--packer` flag runs universal.pkr.hcl against created templates
+   - Uses Ansible provisioning internally via `image_customizations.yml` (or custom playbook with `--custom-ansible`)
    - Supports all 9 distros with single template file using distro parameter
-
-2. **Ansible playbooks**:
-   - Customize templates further using playbooks in `Ansible/Playbooks/`
-   - Triggered automatically by `build.sh --ansible` or manually
+   - Requires Proxmox API Token for authentication
 
 ## Repository Structure
 
@@ -52,14 +54,11 @@ The workflow has three deployment modes for template creation:
   - **workflows/**: Contains Git workflow files for automating the build and deployment process. You can modify these for your Runners but no modifications should be required by default. I recommend running this with a Docker Runner and not a Host Runner.
 
 - **Scripts/**
-  - **build.sh**: Central orchestration script supporting multiple modes:
+  - **build.sh**: Central orchestration script supporting interactive and CLI modes:
     - `--interactive`: Interactive mode with user prompts for all settings
     - `--packer`: Enable Packer customization phase
-    - `--ansible`: Enable Ansible playbook execution (alternative to SSH)
+    - `--ansible`: Use Ansible instead of SSH/proxmox.sh for template creation (optional alternative)
     - `--rebuild`: Delete existing VMs before rebuilding (prevents accidental deletion without this flag)
-    - `--ssh-key PATH`: Use SSH key instead of password authentication
-    - `--config PATH`: Load variables from custom config file (default: Options.ini)
-    - `--env`: Load variables from environment variables instead of config file
   - **proxmox.sh**: Executed on Proxmox host to create base templates. Accepts CLI parameters:
     - `--vmid=NUM`: Starting VMID (default: 800)
     - `--storage=NAME`: Storage pool name (default: local-lvm)
@@ -78,7 +77,7 @@ The workflow has three deployment modes for template creation:
   - **Playbooks/**: 
     - **create_templates.yml**: Main playbook for creating templates via Ansible (alternative to SSH mode). Uses `Create_*` flags in vars.yml
     - **tasks/create_template.yml**: Reusable task for individual template creation
-    - **generic.yml**: Optional post-creation customization playbook (detects OS family for package manager compatibility)
+    - **image_customizations.yml**: Default Ansible playbook for post-creation template customization (detects OS family for package manager compatibility). This playbook is used by Packer when running with `--packer` flag unless overridden with `--custom-ansible`
   - **Variables/**: 
     - **vars.yml**: Variables for Ansible playbooks including template creation flags (Create_Debian11, Create_Ubuntu2404, etc.) and Proxmox connection details
 
@@ -214,6 +213,9 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
 - `--local` - Run directly on Proxmox host (no SSH needed)
 - `--templates=LIST` - Comma-separated list of templates to build (e.g., debian12,ubuntu2404, all, debian, ubuntu)
 - `--custom-packerfile=PATH` - Path to custom Packer template file (used with --packer)
+- `--custom-ansible=PATH` - Path to custom Ansible playbook for template customization (default: ./Ansible/Playbooks/image_customizations.yml)
+- `--packer-token-id=TOKEN` - Proxmox API Token ID for Packer (required with --packer, or prompted in interactive mode)
+- `--packer-token-secret=SECRET` - Proxmox API Token Secret for Packer (required with --packer, or prompted in interactive mode)
 
 **Examples**:
 
@@ -267,6 +269,23 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
   --packer \
   --custom-packerfile=/path/to/custom.pkr.hcl
 
+# With custom Ansible playbook
+./Scripts/build.sh \
+  --proxmox-host=pve.local \
+  --proxmox-user=root \
+  --proxmox-password="password" \
+  --packer \
+  --custom-ansible=/path/to/custom_playbook.yml
+
+# With Packer API tokens provided via CLI (fully automated, no interactive prompts)
+./Scripts/build.sh \
+  --proxmox-host=pve.local \
+  --proxmox-user=root \
+  --proxmox-password="password" \
+  --packer \
+  --packer-token-id="user@pam!token_id" \
+  --packer-token-secret="your-secret-token"
+
 # With all options specified
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
@@ -275,6 +294,8 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
   --storage=local-lvm \
   --templates=all \
   --packer \
+  --packer-token-id="user@pam!token_id" \
+  --packer-token-secret="your-secret-token" \
   --rebuild
 ```
 
@@ -315,61 +336,12 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
   --packer
 ```
 
-```bash
-export PROXMOX_HOST=pve.local
-export PROXMOX_SSH_USER=root
-export PROXMOX_SSH_PASSWORD="password"
-export PROXMOX_API_TOKEN_ID="packer@pam!packer"
-export PROXMOX_API_TOKEN_SECRET="secret"
-export PROXMOX_STORAGE_POOL=local-lvm
-export nVMID=800
-export Download_Debian12=Y
-export Download_Ubuntu2404=Y
-./Scripts/build.sh --env
-```
 
-**Common flags for CLI mode**:
-- `--env` - Load all settings from environment variables
-- `--packer` - Enable Packer customization phase
-- `--rebuild` - Delete existing VMs before building (destructive)
 
 **Examples**:
 
 ```bash
 # Remote Proxmox with SSH password, no Packer
-export PROXMOX_HOST=pve.local
-export PROXMOX_SSH_USER=root
-export PROXMOX_SSH_PASSWORD="password"
-./Scripts/build.sh --env
-
-# Remote Proxmox with SSH key and Packer
-export PROXMOX_HOST=pve.local
-export PROXMOX_SSH_USER=root
-export SSH_PRIVATE_KEY_PATH="/home/user/.ssh/id_rsa"
-export PROXMOX_API_TOKEN_ID="packer@pam!packer"
-export PROXMOX_API_TOKEN_SECRET="secret"
-./Scripts/build.sh --env --packer
-
-# Local Proxmox execution with Packer
-export PROXMOX_IS_REMOTE=false
-export PROXMOX_STORAGE_POOL=local-lvm
-export PROXMOX_API_TOKEN_ID="packer@pam!packer"
-export PROXMOX_API_TOKEN_SECRET="secret"
-./Scripts/build.sh --env --packer
-
-# Build specific distros only
-export PROXMOX_HOST=pve.local
-export PROXMOX_SSH_USER=root
-export PROXMOX_SSH_PASSWORD="password"
-export Download_Debian12=Y
-export Download_Ubuntu2404=Y
-# Explicitly set others to N to skip them
-export Download_Debian11=N
-export Download_Debian13=N
-./Scripts/build.sh --env
-```
-
-### proxmox.sh Script
 
 The `proxmox.sh` script creates base templates. It's normally executed automatically by `build.sh`, but can be run directly:
 
@@ -420,73 +392,6 @@ VM template VMIDs follow this numbering scheme (with default nVMID=800):
 | Rocky Linux 9 | 831 |
 
 If using Packer customization, customized VMs get base VMID + 100 (e.g., Debian 12 → 902).
-
-### Configuration Variables
-
-#### PROXMOX_HOST
-The DNS hostname or IP address of your Proxmox cluster entry point. Can be a single node or cluster VIP. Must have API access.
-
-**Example**: `pve.local` or `192.168.1.100`
-
-#### PROXMOX_HOST_NODE
-The Proxmox node ID where templates should be created. In a cluster with PVE1, PVE2, PVE3, you can specify any of them.
-
-**Example**: `pve` or `pve1`
-
-#### PROXMOX_SSH_USER
-SSH user account on Proxmox (usually `root`).
-
-#### PROXMOX_SSH_PASSWORD
-SSH password for password-based authentication (leave empty to use key-based auth with --ssh-key).
-
-#### PROXMOX_API_TOKEN_ID
-Proxmox API token identifier for Packer customization.
-
-**Format**: `username@realm!token_name` (e.g., `packer@pam!packer`)
-
-#### PROXMOX_API_TOKEN_SECRET
-API token secret (generated in Proxmox UI under user settings).
-
-#### PROXMOX_STORAGE_POOL
-Proxmox storage pool name where templates and VM disks will be stored.
-
-**Example**: `local-lvm`, `local`, or custom pool name
-
-#### nVMID
-Starting VMID for template creation. Plan for 200+ VMIDs being used (base + customized versions + temporary working VMs).
-
-**Default**: `800`
-**WARNING**: Existing VMs at target VMIDs will be deleted!
-    ii. Load your Secrets (API Key and SSH Password OR SSH Private Key) into a Secrets File or an Environment Variable. Options.ini has a commented out section for an include file for secrets. You can also use the following environment variables:
-      - $PROXMOX_API_TOKEN_SECRET
-      - $PROXMOX_SSH_PASSWORD
-      - $PROXMOX_SSH_PRIVATE_KEY
-
-    ii. Run the build script manually:
-
-        sudo chmod +x ./Scripts/build.sh
-        sudo ./Scripts/build.sh
-        
-5. Running with Git
-
-    i. Set up your Git workflows in `.github/workflows/` to trigger the build and deployment process.
-
-    ii. Ensure you have a runner with the `Proxmox` label. The necessary packages for Packer and Ansible will be installed automatically.
-
-    iii. Make sure to set your secrets in Git Actions, or create another way for these environment variables to be set:
-      - $PROXMOX_API_TOKEN_SECRET
-      - $PROXMOX_SSH_PASSWORD
-      - $PROXMOX_SSH_PRIVATE_KEY
-    
-    iv. Commit and push your changes to the repository. Git will automatically detect the workflow and run the scripts.
-
-## Roadmap
-
-Coming Soon...
-- More sample playbook actions
-- Include instruction for creating Packer credentials
-- Create a video on using and customizing the repo
-- Add a way for user passwords to be sent into the Ansible Playbooks. Could be done with Packer but the goal was always for VM customizations to be done via ansible and I don't want to have to pass the 'password' environment variable through packer as if the user doesn't call it that could be an issue.
 
 ## Supported Distros
 
