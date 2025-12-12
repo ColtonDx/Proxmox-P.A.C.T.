@@ -609,19 +609,16 @@ fi
 # Build package list based on selected options
 # Skip packages if Proxmox is local (only install Packer if needed)
 if [ "$PROXMOX_IS_REMOTE" = true ]; then
-    PACKAGES="gnupg2 software-properties-common lsb-release node.js"
+    PACKAGES=""
 
-    # Add ansible only if using Ansible mode
-    if [ "$USE_ANSIBLE" = true ]; then
-        PACKAGES="$PACKAGES ansible"
-    else
-        # Add sshpass if NOT using Ansible mode (need it for SSH password auth)
+    # Add sshpass if NOT using Ansible mode (need it for SSH password auth)
+    if [ "$USE_ANSIBLE" = false ]; then
         PACKAGES="$PACKAGES sshpass"
     fi
 
-    # Add wget, unzip, git only if running Packer
+    # Add wget, unzip, git, curl only if running Packer
     if [ "$RUN_PACKER" = true ]; then
-        PACKAGES="$PACKAGES wget unzip git"
+        PACKAGES="$PACKAGES wget unzip git curl"
     fi
 
     # Install packages based on distribution
