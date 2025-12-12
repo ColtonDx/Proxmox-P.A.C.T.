@@ -133,13 +133,13 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     echo ""
     
     # Ask about deployment mode
-    read -p "Use Ansible only (skip SSH to Proxmox)? (y/n): " -r choice_ansible
+    read -p "Use Ansible Instead of SSH (Y/N) [Default: No]: " -r choice_ansible
     if [[ "$choice_ansible" =~ ^[Yy]$ ]]; then
         USE_ANSIBLE=true
     fi
     
     # Ask about Packer
-    read -p "Run Packer builds for image customization? (y/n): " -r choice_packer
+    read -p "Modify Templates with Packer? (Y/N) [Default: No]: " -r choice_packer
     if [[ "$choice_packer" =~ ^[Yy]$ ]]; then
         RUN_PACKER=true
     fi
@@ -148,6 +148,54 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     read -p "Delete existing VMs before building (rebuild)? (y/n): " -r choice_rebuild
     if [[ "$choice_rebuild" =~ ^[Yy]$ ]]; then
         REBUILD=true
+    fi
+    
+    # Ask which images to build
+    echo ""
+    echo "Select images to create templates from:"
+    echo "  Available: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9"
+    read -p "Enter comma-separated list (or 'all' for all images) [Default: all]: " -r build_images_input
+    if [ -n "$build_images_input" ]; then
+        BUILD_IMAGES="$build_images_input"
+    else
+        BUILD_IMAGES="all"
+    fi
+    
+    # Parse selected images
+    Download_DEBIAN_11="N"
+    Download_DEBIAN_12="N"
+    Download_DEBIAN_13="N"
+    Download_UBUNTU_2204="N"
+    Download_UBUNTU_2404="N"
+    Download_UBUNTU_2504="N"
+    Download_FEDORA_41="N"
+    Download_ROCKY_LINUX_9="N"
+    
+    if [ "$BUILD_IMAGES" = "all" ]; then
+        Download_DEBIAN_11="Y"
+        Download_DEBIAN_12="Y"
+        Download_DEBIAN_13="Y"
+        Download_UBUNTU_2204="Y"
+        Download_UBUNTU_2404="Y"
+        Download_UBUNTU_2504="Y"
+        Download_FEDORA_41="Y"
+        Download_ROCKY_LINUX_9="Y"
+    else
+        # Parse comma-separated list
+        items="$(echo "$BUILD_IMAGES" | tr ',' ' ')"
+        for it in $items; do
+            case "$it" in
+                debian11) Download_DEBIAN_11="Y" ;;
+                debian12) Download_DEBIAN_12="Y" ;;
+                debian13) Download_DEBIAN_13="Y" ;;
+                ubuntu2204) Download_UBUNTU_2204="Y" ;;
+                ubuntu2404) Download_UBUNTU_2404="Y" ;;
+                ubuntu2504) Download_UBUNTU_2504="Y" ;;
+                fedora41) Download_FEDORA_41="Y" ;;
+                rocky9) Download_ROCKY_LINUX_9="Y" ;;
+                *) echo "Warning: unknown image '$it' - ignoring" ;;
+            esac
+        done
     fi
     
     echo ""
@@ -191,16 +239,24 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     if [ "$RUN_PACKER" = true ]; then
         echo ""
         echo "Packer Configuration:"
-        read -p "Proxmox API Token ID: " -r packer_token_id_input
-        if [ -n "$packer_token_id_input" ]; then
-            PACKER_TOKEN_ID="$packer_token_id_input"
-        fi
+        while [ -z "$PACKER_TOKEN_ID" ]; do
+            read -p "Proxmox API Token ID (required): " -r packer_token_id_input
+            if [ -n "$packer_token_id_input" ]; then
+                PACKER_TOKEN_ID="$packer_token_id_input"
+            else
+                echo "Error: Proxmox API Token ID is required when using Packer"
+            fi
+        done
         
-        read -sp "Proxmox API Token Secret: " -r packer_token_secret_input
-        echo ""
-        if [ -n "$packer_token_secret_input" ]; then
-            PACKER_TOKEN_SECRET="$packer_token_secret_input"
-        fi
+        while [ -z "$PACKER_TOKEN_SECRET" ]; do
+            read -sp "Proxmox API Token Secret (required): " -r packer_token_secret_input
+            echo ""
+            if [ -n "$packer_token_secret_input" ]; then
+                PACKER_TOKEN_SECRET="$packer_token_secret_input"
+            else
+                echo "Error: Proxmox API Token Secret is required when using Packer"
+            fi
+        done
         
         read -p "Proxmox Host Node (press Enter for default 'pve'): " -r proxmox_host_node_input
         if [ -n "$proxmox_host_node_input" ]; then
