@@ -127,21 +127,20 @@ fi
 : "${PROXMOX_STORAGE_POOL:=local-lvm}"
 : "${nVMID:=800}"
 
-# Handle interactive mode
+#####################################################################################
+# INTERACTIVE MODE
+#####################################################################################
 if [ "$INTERACTIVE_MODE" = true ]; then
     echo "=== Interactive Mode ==="
     echo ""
     
-    # Ask about deployment mode
-    read -p "Use Ansible Instead of SSH (Y/N) [Default: No]: " -r choice_ansible
-    if [[ "$choice_ansible" =~ ^[Yy]$ ]]; then
-        USE_ANSIBLE=true
-    fi
-    
-    # Ask about Packer
-    read -p "Modify Templates with Packer? (Y/N) [Default: No]: " -r choice_packer
-    if [[ "$choice_packer" =~ ^[Yy]$ ]]; then
-        RUN_PACKER=true
+    # Ask if Proxmox is remote
+    read -p "Is the Proxmox server remote? (Y/N) [Default: Yes]: " -r choice_remote
+    if [[ "$choice_remote" =~ ^[Nn]$ ]]; then
+        USE_ANSIBLE=false
+        PROXMOX_IS_REMOTE=false
+    else
+        PROXMOX_IS_REMOTE=true
     fi
     
     # Ask which images to build
@@ -229,37 +228,11 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     [ "$Download_FEDORA_41" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 21))")
     [ "$Download_ROCKY_LINUX_9" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 31))")
     
-    # Add packer VMIDs if packer is enabled
-    if [ "$RUN_PACKER" = true ]; then
-        declare -a PACKER_VMIDS
-        PACKER_VMIDS=()
-        [ "$Download_DEBIAN_11" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 101))")
-        [ "$Download_DEBIAN_12" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 102))")
-        [ "$Download_DEBIAN_13" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 103))")
-        [ "$Download_UBUNTU_2204" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 111))")
-        [ "$Download_UBUNTU_2404" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 112))")
-        [ "$Download_UBUNTU_2504" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 113))")
-        [ "$Download_FEDORA_41" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 121))")
-        [ "$Download_ROCKY_LINUX_9" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 131))")
-    fi
-    
-    # Ask about rebuild with VMID information
-    echo ""
-    echo "VMIDs that will be created:"
-    echo "  Base templates: ${SELECTED_VMIDS[*]}"
-    if [ "$RUN_PACKER" = true ]; then
-        echo "  Packer customized: ${PACKER_VMIDS[*]}"
-    fi
-    read -p "Delete existing VMs before building (rebuild)? (Y/N) [Default: No]: " -r choice_rebuild
-    if [[ "$choice_rebuild" =~ ^[Yy]$ ]]; then
-        REBUILD=true
-    fi
-    
+    # Ask about Proxmox settings only if remote
+    if [ "$PROXMOX_IS_REMOTE" = true ]; then
         echo ""
-    echo "Infrastructure Configuration:"
-    
-    # Ask for Proxmox connection details if not using Ansible
-    if [ "$USE_ANSIBLE" = false ]; then
+        echo "Proxmox Configuration:"
+        
         read -p "Proxmox host (press Enter for default 'pve.local'): " -r proxmox_host_input
         if [ -n "$proxmox_host_input" ]; then
             PROXMOX_HOST="$proxmox_host_input"
@@ -280,20 +253,47 @@ if [ "$INTERACTIVE_MODE" = true ]; then
         fi
     fi
     
-    # Ask for VMID
+    # Ask for VMID and storage pool
+    echo ""
     read -p "Base VMID (press Enter for default 800): " -r vmid_input
     if [ -n "$vmid_input" ]; then
         nVMID="$vmid_input"
     fi
     
-    # Ask for storage pool
     read -p "Storage pool (press Enter for default 'local-lvm'): " -r storage_input
     if [ -n "$storage_input" ]; then
         PROXMOX_STORAGE_POOL="$storage_input"
     fi
     
-    # Ask for Packer-specific variables if Packer is enabled
-    if [ "$RUN_PACKER" = true ]; then
+    # Ask about rebuild with VMID information
+    echo ""
+    echo "VMIDs that will be created:"
+    echo "  Base templates: ${SELECTED_VMIDS[*]}"
+    read -p "Delete existing VMs before building (rebuild)? (Y/N) [Default: No]: " -r choice_rebuild
+    if [[ "$choice_rebuild" =~ ^[Yy]$ ]]; then
+        REBUILD=true
+    fi
+    
+    # Ask about Packer
+    echo ""
+    read -p "Modify Templates with Packer? (Y/N) [Default: No]: " -r choice_packer
+    if [[ "$choice_packer" =~ ^[Yy]$ ]]; then
+        RUN_PACKER=true
+        
+        # Add packer VMIDs if packer is enabled
+        declare -a PACKER_VMIDS
+        PACKER_VMIDS=()
+        [ "$Download_DEBIAN_11" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 101))")
+        [ "$Download_DEBIAN_12" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 102))")
+        [ "$Download_DEBIAN_13" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 103))")
+        [ "$Download_UBUNTU_2204" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 111))")
+        [ "$Download_UBUNTU_2404" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 112))")
+        [ "$Download_UBUNTU_2504" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 113))")
+        [ "$Download_FEDORA_41" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 121))")
+        [ "$Download_ROCKY_LINUX_9" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 131))")
+        
+        echo "  Packer customized: ${PACKER_VMIDS[*]}"
+        
         echo ""
         echo "Packer Configuration:"
         while [ -z "$PACKER_TOKEN_ID" ]; do
@@ -319,6 +319,13 @@ if [ "$INTERACTIVE_MODE" = true ]; then
         if [ -n "$proxmox_host_node_input" ]; then
             PROXMOX_HOST_NODE="$proxmox_host_node_input"
         fi
+    fi
+    
+    # Ask about cleanup
+    echo ""
+    read -p "Clean up temporary build artifacts after build completes? (Y/N) [Default: No]: " -r choice_cleanup
+    if [[ "$choice_cleanup" =~ ^[Yy]$ ]]; then
+        CLEANUP_BUILD_VMS=true
     fi
     
     # Set flag to skip config file loading
@@ -411,42 +418,44 @@ fi
 #####################################################################################
 
 # Build package list based on selected options
-PACKAGES="gnupg2 software-properties-common lsb-release node.js"
+# Skip packages if Proxmox is local (only install Packer if needed)
+if [ "$PROXMOX_IS_REMOTE" = true ]; then
+    PACKAGES="gnupg2 software-properties-common lsb-release node.js"
 
-# Add ansible only if using Ansible mode
-if [ "$USE_ANSIBLE" = true ]; then
-    PACKAGES="$PACKAGES ansible"
+    # Add ansible only if using Ansible mode
+    if [ "$USE_ANSIBLE" = true ]; then
+        PACKAGES="$PACKAGES ansible"
+    fi
+
+    # Add sshpass only if NOT using Ansible mode
+    if [ "$USE_ANSIBLE" = false ]; then
+        PACKAGES="$PACKAGES sshpass"
+    fi
+
+    # Add wget, unzip, git only if running Packer
+    if [ "$RUN_PACKER" = true ]; then
+        PACKAGES="$PACKAGES wget unzip git"
+    fi
+
+    # Install packages based on distribution
+    case "$OS" in
+        ubuntu|debian)
+            sudo apt-get install -y $PACKAGES > /dev/null 2>&1
+            ;;
+        centos|rocky|almalinux|fedora|rhel)
+            sudo dnf install -y $PACKAGES > /dev/null 2>&1
+            ;;
+        opensuse|sles)
+            sudo zypper install -y $PACKAGES > /dev/null 2>&1
+            ;;
+        *)
+            echo "Unsupported distribution: $OS"
+            exit 1
+            ;;
+    esac
 fi
 
-# Add sshpass only if NOT using Ansible mode
-if [ "$USE_ANSIBLE" = false ]; then
-    PACKAGES="$PACKAGES sshpass"
-fi
-
-# Add wget, unzip, git only if running Packer
-if [ "$RUN_PACKER" = true ]; then
-    PACKAGES="$PACKAGES wget unzip git"
-fi
-
-# Install packages based on distribution
-case "$OS" in
-    ubuntu|debian)
-        sudo apt-get update > /dev/null 2>&1
-        sudo apt-get install -y $PACKAGES > /dev/null 2>&1
-        ;;
-    centos|rocky|almalinux|fedora|rhel)
-        sudo dnf install -y $PACKAGES > /dev/null 2>&1
-        ;;
-    opensuse|sles)
-        sudo zypper install -y $PACKAGES > /dev/null 2>&1
-        ;;
-    *)
-        echo "Unsupported distribution: $OS"
-        exit 1
-        ;;
-esac
-
-# Install Packer only if --packer option is enabled
+# Install Packer only if --packer option is enabled (regardless of local or remote)
 if [ "$RUN_PACKER" = true ]; then
     if ! command -v packer &> /dev/null
     then
@@ -458,7 +467,7 @@ if [ "$RUN_PACKER" = true ]; then
         # Move the Packer binary to /usr/local/bin
         sudo mv packer /usr/local/bin/
         # Clean up the zip file
-        rm packer_1.7.8_linux_amd64.zip
+        rm packer_1.7.8_linux_azip
         echo "Packer installed successfully."
     else
         echo "Packer is already installed."
@@ -469,10 +478,8 @@ fi
 ################### MAIN
 #####################################################################################
 
-# Skip SSH and proxmox.sh if using Ansible-only mode
-if [ "$USE_ANSIBLE" = true ]; then
-    echo "Ansible-only mode: Skipping SSH connection to Proxmox and proxmox.sh execution"
-else
+# Run proxmox.sh to create templates (SSH to remote or run locally)
+if [ "$PROXMOX_IS_REMOTE" = true ]; then
     # Build proxmox.sh arguments based on configuration
     PROXMOX_SCRIPT_ARGS="--vmid=$nVMID --storage=$PROXMOX_STORAGE_POOL"
     
@@ -539,6 +546,43 @@ EOF
         ./workingdir/proxmox.sh $PROXMOX_SCRIPT_ARGS
 EOF
     fi
+else
+    # Run proxmox.sh locally
+    echo "Running proxmox.sh locally..."
+    
+    # Build proxmox.sh arguments
+    PROXMOX_SCRIPT_ARGS="--vmid=$nVMID --storage=$PROXMOX_STORAGE_POOL"
+    
+    if [ "$REBUILD" = true ]; then
+        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --rebuild"
+    fi
+    
+    if [ "$RUN_PACKER" = true ]; then
+        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --packer-enabled"
+    fi
+    
+    # Build --build argument
+    BUILD_LIST=""
+    [ "$Download_DEBIAN_11" = "Y" ] && BUILD_LIST="${BUILD_LIST}debian11,"
+    [ "$Download_DEBIAN_12" = "Y" ] && BUILD_LIST="${BUILD_LIST}debian12,"
+    [ "$Download_DEBIAN_13" = "Y" ] && BUILD_LIST="${BUILD_LIST}debian13,"
+    [ "$Download_UBUNTU_2204" = "Y" ] && BUILD_LIST="${BUILD_LIST}ubuntu2204,"
+    [ "$Download_UBUNTU_2205" = "Y" ] && BUILD_LIST="${BUILD_LIST}ubuntu2205,"
+    [ "$Download_UBUNTU_2404" = "Y" ] && BUILD_LIST="${BUILD_LIST}ubuntu2404,"
+    [ "$Download_UBUNTU_2504" = "Y" ] && BUILD_LIST="${BUILD_LIST}ubuntu2504,"
+    [ "$Download_FEDORA_41" = "Y" ] && BUILD_LIST="${BUILD_LIST}fedora41,"
+    [ "$Download_ROCKY_LINUX_9" = "Y" ] && BUILD_LIST="${BUILD_LIST}rocky9,"
+    
+    BUILD_LIST="${BUILD_LIST%,}"
+    
+    if [ -n "$BUILD_LIST" ]; then
+        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --build=$BUILD_LIST"
+    fi
+    
+    # Create local working directory and run
+    mkdir -p ./workingdir
+    chmod +x ./Scripts/proxmox.sh
+    ./Scripts/proxmox.sh $PROXMOX_SCRIPT_ARGS
 fi
 
 # Run Packer if enabled
@@ -548,3 +592,14 @@ if [ "$RUN_PACKER" = true ]; then
 else
     echo "Packer builds skipped"
 fi
+
+# Run cleanup if enabled
+if [ "$CLEANUP_BUILD_VMS" = true ] && [ "$RUN_PACKER" = true ]; then
+    echo "Cleaning up temporary build artifacts..."
+    chmod +x ./Scripts/cleanup.sh
+    ./Scripts/cleanup.sh --vmid=$nVMID --cleanup-vms
+fi
+
+echo ""
+echo "=== Build Complete ==="
+echo "Template build process finished successfully!"
