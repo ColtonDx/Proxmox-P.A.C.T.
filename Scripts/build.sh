@@ -62,14 +62,7 @@ WORK_DIR_NAME="pact_build_$(date +%s)_${RANDOM}"
 ################### CLI OPTION PARSING
 #####################################################################################
 
-# Source answerfile if it exists (.env.local)
-# This allows users to pre-configure variables instead of using CLI args or interactive mode
-if [ -f ".env.local" ]; then
-    echo "Loading configuration from .env.local..."
-    source .env.local
-fi
-
-# Default flags and values
+# Default flags and values (set BEFORE sourcing answerfile so answerfile can override)
 USE_ANSIBLE=false
 RUN_PACKER=false
 REBUILD=false
@@ -82,6 +75,14 @@ CUSTOM_ANSIBLE_VARFILE=""
 BUILD_TEMPLATES=""
 PACKER_TOKEN_ID=""
 PACKER_TOKEN_SECRET=""
+
+# Source answerfile if it exists (.env.local)
+# This allows users to pre-configure variables instead of using CLI args or interactive mode
+# Answerfile values are loaded here and can be overridden by CLI arguments below
+if [ -f ".env.local" ]; then
+    echo "Loading configuration from .env.local..."
+    source .env.local
+fi
 
 print_usage() {
     cat <<EOF
@@ -487,13 +488,6 @@ if [ "$INTERACTIVE_MODE" = true ]; then
         fi
     fi
     
-    # Ask about cleanup
-    echo ""
-    read -p "Clean up temporary build artifacts after build completes? (Y/N) [Default: No]: " -r choice_cleanup
-    if [[ "$choice_cleanup" =~ ^[Yy]$ ]]; then
-        CLEANUP_BUILD_VMS=true
-    fi
-    
     echo ""
 fi
 
@@ -503,6 +497,15 @@ if [ "$RUN_PACKER" = true ]; then
         echo "Error: PACKER_TOKEN_ID and PACKER_TOKEN_SECRET are required when using --packer" >&2
         exit 1
     fi
+fi
+
+# Validate that at least one template is selected
+if [ "$Download_DEBIAN_11" != "Y" ] && [ "$Download_DEBIAN_12" != "Y" ] && [ "$Download_DEBIAN_13" != "Y" ] && \
+   [ "$Download_UBUNTU_2204" != "Y" ] && [ "$Download_UBUNTU_2404" != "Y" ] && [ "$Download_UBUNTU_2504" != "Y" ] && \
+   [ "$Download_FEDORA_41" != "Y" ] && [ "$Download_ROCKY_LINUX_9" != "Y" ]; then
+    echo "Error: At least one template must be selected" >&2
+    echo "Use --interactive mode for guidance or set BUILD_TEMPLATES via CLI/answerfile" >&2
+    exit 1
 fi
 
 # Display configuration
