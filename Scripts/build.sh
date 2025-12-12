@@ -6,16 +6,20 @@
 # This script orchestrates the complete build process for creating Proxmox VM
 # templates and customizing them with Packer. It supports:
 #
-#  - Multiple deployment modes:
+#  - Two primary modes:
+#    * Interactive mode: Prompts user for all settings
+#    * CLI argument mode: Pass all settings as command-line arguments
+#
+#  - Multiple template creation methods:
 #    * SSH mode (default): SSH to Proxmox and run proxmox.sh to create templates
-#    * Ansible mode: Skip SSH and use Ansible-only playbooks
-#    * Interactive mode: Prompt user for mode selection
+#    * Ansible mode (--ansible): Use Ansible playbooks instead of proxmox.sh
+#    * Local mode (--local): Run directly on Proxmox host without SSH
 #
-#  - Conditional Packer builds: Optionally run Packer to customize VM images
-#
-#  - Flexible configuration:
-#    * Load from config file via --config=PATH (default: Options.ini)
-#    * Load from environment variables via --env
+#  - Optional Packer customization:
+#    * --packer: Enable Packer customization phase with API tokens
+#    * --custom-packerfile: Use custom Packer template instead of default
+#    * --custom-ansible: Use custom Ansible playbook for Packer customization
+#    * --custom-ansible-varfile: Use custom variables file for Ansible playbook
 #
 #  - Smart dependency management:
 #    * Installs only required packages based on selected options
@@ -23,14 +27,27 @@
 #
 # Usage: ./build.sh [OPTIONS]
 #
-# Options:
-#   --ansible       Use Ansible-only mode (skip SSH to Proxmox)
-#   --packer        Run Packer builds for image customization
-#   --rebuild       Delete existing VMs before rebuilding (destructive)
-#   --interactive   Prompt user for deployment mode and Packer option
-#   --config=PATH   Load variables from config file (default: Options.ini)
-#   --env           Load variables from environment variables
-#   --help          Show help message
+# Two modes (mutually exclusive):
+#   --interactive              Prompt user for all settings (cannot mix with other args)
+#   [CLI arguments]            Specify settings directly via command-line arguments
+#
+# CLI argument options:
+#   --ansible                  Use Ansible instead of SSH for template creation
+#   --packer                   Enable Packer customization phase
+#   --rebuild                  Delete existing VMs before rebuilding (destructive)
+#   --local                    Run directly on Proxmox host (no SSH needed)
+#   --proxmox-host=HOSTNAME    Proxmox hostname or IP address
+#   --proxmox-user=USERNAME    SSH username for Proxmox (default: root)
+#   --proxmox-password=PASS    SSH password for Proxmox authentication
+#   --proxmox-key=PATH         Path to SSH private key for authentication
+#   --storage=POOL             Proxmox storage pool name
+#   --templates=LIST           Comma-separated list of templates to build
+#   --custom-packerfile=PATH   Path to custom Packer template file
+#   --custom-ansible=PATH      Path to custom Ansible playbook for Packer
+#   --custom-ansible-varfile=PATH  Path to custom variables file for Ansible
+#   --packer-token-id=TOKEN    Proxmox API Token ID for Packer
+#   --packer-token-secret=SEC  Proxmox API Token Secret for Packer
+#   --help                     Show help message
 #
 ################################################################################
 
@@ -47,6 +64,7 @@ SSH_PRIVATE_KEY_PATH=""
 PROXMOX_IS_REMOTE=true
 CUSTOM_PACKERFILE=""
 CUSTOM_ANSIBLE_PLAYBOOK=""
+CUSTOM_ANSIBLE_VARFILE=""
 BUILD_TEMPLATES=""
 PACKER_TOKEN_ID=""
 PACKER_TOKEN_SECRET=""
@@ -69,6 +87,7 @@ Options:
   --templates=LIST           Comma-separated list of templates to build (e.g., debian12,ubuntu2404).
   --custom-packerfile=PATH   Path to custom Packer template file instead of default.
   --custom-ansible=PATH      Path to custom Ansible playbook for template customization.
+  --custom-ansible-varfile=PATH  Path to custom variables file for Ansible playbook (default: ./Ansible/Variables/vars.yml).
   --packer-token-id=TOKEN    Proxmox API Token ID for Packer (required with --packer).
   --packer-token-secret=SEC  Proxmox API Token Secret for Packer (required with --packer).
   --help                     Show this help and exit
@@ -124,6 +143,9 @@ for arg in "$@"; do
             ;;
         --custom-ansible=*)
             CUSTOM_ANSIBLE_PLAYBOOK="${arg#*=}"
+            ;;
+        --custom-ansible-varfile=*)
+            CUSTOM_ANSIBLE_VARFILE="${arg#*=}"
             ;;
         --packer-token-id=*)
             PACKER_TOKEN_ID="${arg#*=}"
@@ -513,6 +535,7 @@ packer_build() {
     local vmid="$2"
     local packerfile="${CUSTOM_PACKERFILE:-./Packer/Templates/universal.pkr.hcl}"
     local ansiblefile="${CUSTOM_ANSIBLE_PLAYBOOK:-./Ansible/Playbooks/image_customizations.yml}"
+    local ansiblevarfile="${CUSTOM_ANSIBLE_VARFILE:-./Ansible/Variables/vars.yml}"
     
     packer init "$packerfile"
     packer build -var-file=./Packer/Variables/vars.json \
@@ -524,6 +547,7 @@ packer_build() {
         -var "storage_pool=$PROXMOX_STORAGE_POOL" \
         -var "distro=$distro_name" \
         -var "custom_ansible_playbook=$ansiblefile" \
+        -var "custom_ansible_varfile=$ansiblevarfile" \
         "$packerfile"
 }
 

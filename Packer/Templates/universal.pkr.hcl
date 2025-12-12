@@ -70,6 +70,12 @@ variable "custom_ansible_playbook" {
     description = "Path to custom Ansible playbook for template customization"
 }
 
+variable "custom_ansible_varfile" {
+    type = string
+    default = "./Ansible/Variables/vars.yml"
+    description = "Path to custom Ansible variables file for playbook"
+}
+
 # Locals for distro-specific configuration
 locals {
   distro_config = {
@@ -207,7 +213,7 @@ build {
     provisioner "ansible" {
         playbook_file = var.custom_ansible_playbook
         use_proxy = false
-        extra_arguments = ["-e", "@./Ansible/Variables/vars.yml", "-e", "distro=${var.distro}"]
+        extra_arguments = ["-e", "@${var.custom_ansible_varfile}", "-e", "distro=${var.distro}"]
     }
 
     # Generalize the Image
