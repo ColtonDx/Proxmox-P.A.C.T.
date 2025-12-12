@@ -134,17 +134,7 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     echo "=== Interactive Mode ==="
     echo ""
     
-    # Ask if Proxmox is remote
-    read -p "Is the Proxmox server remote? (Y/N) [Default: Yes]: " -r choice_remote
-    if [[ "$choice_remote" =~ ^[Nn]$ ]]; then
-        USE_ANSIBLE=false
-        PROXMOX_IS_REMOTE=false
-    else
-        PROXMOX_IS_REMOTE=true
-    fi
-    
-    # Ask which images to build
-    echo ""
+    # Q1: Ask which images to build
     echo "Select images to create templates from:"
     echo "  Available: all, debian, ubuntu, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9"
     
@@ -216,6 +206,62 @@ if [ "$INTERACTIVE_MODE" = true ]; then
         fi
     done
     
+    # Q2: Ask about Packer customization
+    echo ""
+    read -p "Do you want to customize the templates with Packer? (Y/N) [Default: No]: " -r choice_packer
+    if [[ "$choice_packer" =~ ^[Yy]$ ]]; then
+        RUN_PACKER=true
+    fi
+    
+    # Q3: Ask for Base VMID
+    echo ""
+    read -p "Base VMID (press Enter for default 800): " -r vmid_input
+    if [ -n "$vmid_input" ]; then
+        nVMID="$vmid_input"
+    fi
+    
+    # Q4: Ask if Proxmox is remote
+    echo ""
+    read -p "Is the Proxmox server remote? (Y/N) [Default: Yes]: " -r choice_remote
+    if [[ "$choice_remote" =~ ^[Nn]$ ]]; then
+        USE_ANSIBLE=false
+        PROXMOX_IS_REMOTE=false
+    else
+        PROXMOX_IS_REMOTE=true
+    fi
+    
+    # Ask Proxmox settings only if remote
+    if [ "$PROXMOX_IS_REMOTE" = true ]; then
+        echo ""
+        echo "Proxmox Configuration:"
+        
+        read -p "Proxmox Hostname or IP Address (press Enter for default 'pve.local'): " -r proxmox_host_input
+        if [ -n "$proxmox_host_input" ]; then
+            PROXMOX_HOST="$proxmox_host_input"
+        fi
+        
+        read -p "SSH Username (press Enter for default 'root'): " -r ssh_user_input
+        if [ -n "$ssh_user_input" ]; then
+            PROXMOX_SSH_USER="$ssh_user_input"
+        fi
+        
+        read -p "SSH Privatekey Path (press Enter for password authentication): " -r ssh_key_input
+        if [ -n "$ssh_key_input" ]; then
+            SSH_PRIVATE_KEY_PATH="$ssh_key_input"
+        else
+            # Ask for SSH password if not using key
+            read -sp "SSH Password: " -r PROXMOX_SSH_PASSWORD
+            echo ""
+        fi
+    fi
+    
+    # Ask for storage pool (for both remote and local)
+    echo ""
+    read -p "Storage pool (press Enter for default 'local-lvm'): " -r storage_input
+    if [ -n "$storage_input" ]; then
+        PROXMOX_STORAGE_POOL="$storage_input"
+    fi
+    
     # Calculate VMIDs for selected distros
     declare -a SELECTED_VMIDS
     SELECTED_VMIDS=()
@@ -228,50 +274,8 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     [ "$Download_FEDORA_41" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 21))")
     [ "$Download_ROCKY_LINUX_9" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 31))")
     
-    # Ask about Proxmox settings only if remote
-    if [ "$PROXMOX_IS_REMOTE" = true ]; then
-        echo ""
-        echo "Proxmox Configuration:"
-        
-        read -p "Proxmox host (press Enter for default 'pve.local'): " -r proxmox_host_input
-        if [ -n "$proxmox_host_input" ]; then
-            PROXMOX_HOST="$proxmox_host_input"
-        fi
-        
-        read -p "SSH user (press Enter for default 'root'): " -r ssh_user_input
-        if [ -n "$ssh_user_input" ]; then
-            PROXMOX_SSH_USER="$ssh_user_input"
-        fi
-        
-        read -p "SSH private key path (press Enter for password authentication): " -r ssh_key_input
-        if [ -n "$ssh_key_input" ]; then
-            SSH_PRIVATE_KEY_PATH="$ssh_key_input"
-        else
-            # Ask for SSH password if not using key
-            read -sp "SSH password: " -r PROXMOX_SSH_PASSWORD
-            echo ""
-        fi
-    fi
-    
-    # Ask for VMID and storage pool
-    echo ""
-    read -p "Base VMID (press Enter for default 800): " -r vmid_input
-    if [ -n "$vmid_input" ]; then
-        nVMID="$vmid_input"
-    fi
-    
-    read -p "Storage pool (press Enter for default 'local-lvm'): " -r storage_input
-    if [ -n "$storage_input" ]; then
-        PROXMOX_STORAGE_POOL="$storage_input"
-    fi
-    
-    # Ask about Packer before rebuild so we can show all VMIDs
-    echo ""
-    read -p "Modify Templates with Packer? (Y/N) [Default: No]: " -r choice_packer
-    if [[ "$choice_packer" =~ ^[Yy]$ ]]; then
-        RUN_PACKER=true
-        
-        # Add packer VMIDs if packer is enabled
+    # If Packer is enabled, calculate Packer VMIDs
+    if [ "$RUN_PACKER" = true ]; then
         declare -a PACKER_VMIDS
         PACKER_VMIDS=()
         [ "$Download_DEBIAN_11" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 101))")
@@ -284,7 +288,7 @@ if [ "$INTERACTIVE_MODE" = true ]; then
         [ "$Download_ROCKY_LINUX_9" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 131))")
     fi
     
-    # Ask about rebuild with ALL VMID information displayed
+    # Display VMID information
     echo ""
     echo "VMIDs that will be created:"
     if [ "$RUN_PACKER" = true ]; then
@@ -302,6 +306,9 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     else
         echo "  Base templates: ${SELECTED_VMIDS[*]}"
     fi
+    
+    # Ask about rebuild with VMID information displayed
+    echo ""
     read -p "Delete existing VMs before building (rebuild)? (Y/N) [Default: No]: " -r choice_rebuild
     if [[ "$choice_rebuild" =~ ^[Yy]$ ]]; then
         REBUILD=true
