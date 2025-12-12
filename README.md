@@ -49,8 +49,6 @@ After base templates are created (regardless of whether SSH or Ansible mode was 
 
 ## Repository Structure
 
-- **.Github/**
-
 - **Scripts/**
   - **build.sh**: Central orchestration script supporting interactive and CLI modes:
     - `--interactive`: Interactive mode with user prompts for all settings
