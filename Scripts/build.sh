@@ -589,10 +589,8 @@ if [ "$PROXMOX_IS_REMOTE" = true ]; then
     # Add ansible only if using Ansible mode
     if [ "$USE_ANSIBLE" = true ]; then
         PACKAGES="$PACKAGES ansible"
-    fi
-
-    # Add sshpass only if NOT using Ansible mode
-    if [ "$USE_ANSIBLE" = false ]; then
+    else
+        # Add sshpass if NOT using Ansible mode (need it for SSH password auth)
         PACKAGES="$PACKAGES sshpass"
     fi
 
@@ -604,6 +602,7 @@ if [ "$PROXMOX_IS_REMOTE" = true ]; then
     # Install packages based on distribution
     case "$OS" in
         ubuntu|debian)
+            sudo apt-get update > /dev/null 2>&1
             sudo apt-get install -y $PACKAGES > /dev/null 2>&1
             ;;
         centos|rocky|almalinux|fedora|rhel)
