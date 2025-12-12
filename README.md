@@ -311,7 +311,8 @@ You'll be guided through:
 6. Storage pool
 7. Rebuild confirmation with full VMID preview
 8. Packer configuration (if enabled)
-9. Cleanup preference
+
+Note: Temporary build VMs are automatically cleaned up after template creation.
 
 #### CLI/Command-Line Argument Mode
 
@@ -382,7 +383,6 @@ PACKER_TOKEN_ID="packer@pam!packer_token"
 PACKER_TOKEN_SECRET="your_token_secret"
 BUILD_TEMPLATES="all"
 REBUILD=false
-CLEANUP_BUILD_VMS=true
 ```
 
 **Examples**:
