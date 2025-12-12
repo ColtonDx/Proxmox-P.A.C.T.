@@ -52,6 +52,13 @@
 ################################################################################
 
 #####################################################################################
+################### WORKING DIRECTORY SETUP
+#####################################################################################
+
+# Generate a unique working directory name to avoid conflicts
+WORK_DIR_NAME="pact_build_$(date +%s)_${RANDOM}"
+
+#####################################################################################
 ################### CLI OPTION PARSING
 #####################################################################################
 
@@ -677,27 +684,29 @@ if [ "$PROXMOX_IS_REMOTE" = true ]; then
             exit 1
         fi
         
-        # Create working directory on remote host
-        ssh -i "$SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" mkdir -p ./workingdir
+        # Create unique working directory on remote host
+        ssh -i "$SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" mkdir -p "./$WORK_DIR_NAME"
         
-        scp -i "$SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no ./Scripts/proxmox.sh $PROXMOX_SSH_USER@$PROXMOX_HOST:./workingdir
+        scp -i "$SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no ./Scripts/proxmox.sh $PROXMOX_SSH_USER@$PROXMOX_HOST:"./$WORK_DIR_NAME"
         # SSH to the remote host and run proxmox.sh with arguments
         ssh -i "$SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" << EOF
-        chmod +x ./workingdir/proxmox.sh
-        ./workingdir/proxmox.sh $PROXMOX_SCRIPT_ARGS
+        chmod +x ./$WORK_DIR_NAME/proxmox.sh
+        ./$WORK_DIR_NAME/proxmox.sh $PROXMOX_SCRIPT_ARGS
+        rm -rf ./$WORK_DIR_NAME
 EOF
     else
         # Using password authentication
         echo "Starting build using password authentication"
-        # Create working directory on remote host
-        sshpass -p "$PROXMOX_SSH_PASSWORD" ssh -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@$PROXMOX_HOST mkdir -p ./workingdir
+        # Create unique working directory on remote host
+        sshpass -p "$PROXMOX_SSH_PASSWORD" ssh -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@$PROXMOX_HOST mkdir -p "./$WORK_DIR_NAME"
         
         # Copy files to the remote host
-        sshpass -p "$PROXMOX_SSH_PASSWORD" scp -o StrictHostKeyChecking=no ./Scripts/proxmox.sh $PROXMOX_SSH_USER@$PROXMOX_HOST:./workingdir
+        sshpass -p "$PROXMOX_SSH_PASSWORD" scp -o StrictHostKeyChecking=no ./Scripts/proxmox.sh $PROXMOX_SSH_USER@$PROXMOX_HOST:"./$WORK_DIR_NAME"
         # SSH to the remote host and run proxmox.sh with arguments
         sshpass -p "$PROXMOX_SSH_PASSWORD" ssh -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@$PROXMOX_HOST << EOF
-        chmod +x ./workingdir/proxmox.sh
-        ./workingdir/proxmox.sh $PROXMOX_SCRIPT_ARGS
+        chmod +x ./$WORK_DIR_NAME/proxmox.sh
+        ./$WORK_DIR_NAME/proxmox.sh $PROXMOX_SCRIPT_ARGS
+        rm -rf ./$WORK_DIR_NAME
 EOF
     fi
 else
@@ -733,10 +742,15 @@ else
         PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --build=$BUILD_LIST"
     fi
     
-    # Create local working directory and run
-    mkdir -p ./workingdir
-    chmod +x ./Scripts/proxmox.sh
-    ./Scripts/proxmox.sh $PROXMOX_SCRIPT_ARGS
+    # Create unique local working directory and run
+    mkdir -p "./$WORK_DIR_NAME"
+    cp ./Scripts/proxmox.sh "./$WORK_DIR_NAME/"
+    chmod +x "./$WORK_DIR_NAME/proxmox.sh"
+    
+    "./$WORK_DIR_NAME/proxmox.sh" $PROXMOX_SCRIPT_ARGS
+    
+    # Cleanup working directory
+    rm -rf "./$WORK_DIR_NAME"
 fi
 
 # Run Packer if enabled
@@ -747,11 +761,42 @@ else
     echo "Packer builds skipped"
 fi
 
-# Run cleanup if enabled
-if [ "$CLEANUP_BUILD_VMS" = true ] && [ "$RUN_PACKER" = true ]; then
-    echo "Cleaning up temporary build artifacts..."
-    chmod +x ./Scripts/cleanup.sh
-    ./Scripts/cleanup.sh --vmid=$nVMID --cleanup-vms
+# Cleanup intermediate build VMs if Packer was run
+if [ "$RUN_PACKER" = true ]; then
+    echo "Cleaning up intermediate build VMs..."
+    
+    # The intermediate build VMs are at the base VMID offsets (1, 2, 3, 11, 12, 13, 21, 31)
+    # After Packer creates customized versions at offset+100, we no longer need these
+    declare -a DISTRO_OFFSETS=(1 2 3 11 12 13 21 31)
+    
+    for offset in "${DISTRO_OFFSETS[@]}"; do
+        vmid=$((nVMID + offset))
+        # Check if this distro was selected
+        case $offset in
+            1) [ "$Download_DEBIAN_11" != "Y" ] && continue ;;
+            2) [ "$Download_DEBIAN_12" != "Y" ] && continue ;;
+            3) [ "$Download_DEBIAN_13" != "Y" ] && continue ;;
+            11) [ "$Download_UBUNTU_2204" != "Y" ] && continue ;;
+            12) [ "$Download_UBUNTU_2404" != "Y" ] && continue ;;
+            13) [ "$Download_UBUNTU_2504" != "Y" ] && continue ;;
+            21) [ "$Download_FEDORA_41" != "Y" ] && continue ;;
+            31) [ "$Download_ROCKY_LINUX_9" != "Y" ] && continue ;;
+        esac
+        
+        echo "  Destroying intermediate VMID $vmid..."
+        
+        # If remote, execute qm destroy on the remote host
+        if [ "$PROXMOX_IS_REMOTE" = true ]; then
+            if [ -n "$SSH_PRIVATE_KEY_PATH" ]; then
+                ssh -i "$SSH_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@"$PROXMOX_HOST" qm destroy "$vmid" 2>/dev/null || true
+            else
+                sshpass -p "$PROXMOX_SSH_PASSWORD" ssh -o StrictHostKeyChecking=no $PROXMOX_SSH_USER@$PROXMOX_HOST qm destroy "$vmid" 2>/dev/null || true
+            fi
+        else
+            # Local execution
+            qm destroy "$vmid" 2>/dev/null || true
+        fi
+    done
 fi
 
 echo ""
