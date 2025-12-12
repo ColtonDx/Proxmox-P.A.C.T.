@@ -9,15 +9,14 @@ The workflow has three deployment modes for template creation:
 
 ### SSH Mode (Default)
 1. **On your management machine**: 
-   - Reads configuration from environment variables, `.env.local`, or CLI parameters
+   - Reads configuration from CLI arguments, interactive mode, or from an answerfile
    - Builds a list of distros to process based on enabled options or explicit `--build` parameter
    - Connects to Proxmox via SSH using password or key-based authentication
    - Uploads `proxmox.sh` script with CLI parameters (`--vmid`, `--storage`, `--build`)
    - Executes proxmox.sh remotely
 
 2. **On Proxmox**:
-   - Parses CLI parameters for VMID, storage pool, and distros to build
-   - Downloads cloud images for each enabled distro
+   - Downloads cloud images for each enabled distros
    - Customizes VMs with virt-customize (qemu-guest-agent, CloudInit, etc.)
    - Converts VMs to templates
    - Cleans up temporary resources
@@ -35,9 +34,9 @@ The workflow has three deployment modes for template creation:
 **Note**: Using `--ansible` only affects how base templates are created (Ansible instead of SSH). It does NOT impact the optional Packer customization phase, which uses Ansible playbooks regardless of which template creation method was chosen.
 
 ### Standalone Mode (Direct on Proxmox)
-- Copy `proxmox.sh` directly to your Proxmox host
-- Execute locally without SSH: `./proxmox.sh --vmid=800 --storage=local-lvm --build=debian12,ubuntu2404`
-- No external dependencies needed on Proxmox
+- Copy `build.sh` directly to your Proxmox host
+- Execute locally without SSH: `./build.sh --local`
+- Runs the same template creation process without the SSH connections
 
 ### Post-Template Customization (Optional)
 After base templates are created (regardless of whether SSH or Ansible mode was used), Packer can optionally customize templates:
@@ -51,7 +50,6 @@ After base templates are created (regardless of whether SSH or Ansible mode was 
 ## Repository Structure
 
 - **.Github/**
-  - **workflows/**: Contains Git workflow files for automating the build and deployment process. You can modify these for your Runners but no modifications should be required by default. I recommend running this with a Docker Runner and not a Host Runner.
 
 - **Scripts/**
   - **build.sh**: Central orchestration script supporting interactive and CLI modes:
@@ -70,8 +68,6 @@ After base templates are created (regardless of whether SSH or Ansible mode was 
   - **Templates/**: 
     - **universal.pkr.hcl**: Universal template supporting all 9 distros. Uses `distro` variable to configure behavior for: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9
     - Individual distro files (debian11.pkr.hcl, etc.) are deprecated; use universal.pkr.hcl instead
-  - **Variables/**: 
-    - **vars.json**: Variables configuration for Packer builds. Contains distro-specific settings and defaults.
 
 - **Ansible/**
   - **Playbooks/**: 
@@ -92,7 +88,6 @@ After base templates are created (regardless of whether SSH or Ansible mode was 
 
 2. **Management Machine Requirements**:
    - Bash shell (Linux, macOS, or Windows with WSL)
-   - curl (for downloading templates)
    - git (for cloning the repository)
    - For SSH mode: sshpass (auto-installed by build.sh if using password auth) or SSH private key
    - For Ansible mode: Ansible (auto-installed by build.sh if using --ansible flag)
@@ -183,9 +178,6 @@ If you chose to use Packer, you'll be prompted for:
 - **Proxmox API Token ID** - Format: `username@realm!token_name` (e.g., `packer@pam!packer`)
 - **Proxmox API Token Secret** - The secret generated in Proxmox for the token
 - **Proxmox Host Node** - Which Proxmox node to use (default: `pve`)
-
-#### 8. Cleanup
-Choose whether to clean up temporary build artifacts after the build completes (default: `N`).
 
 ### CLI/Command-Line Argument Mode
 
