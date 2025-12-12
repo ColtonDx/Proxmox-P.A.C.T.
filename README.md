@@ -109,184 +109,299 @@ The workflow has three deployment modes for template creation:
    chmod +x ./Scripts/build.sh
    ```
 
-2. **Choose Your Deployment Mode**
+2. **Run the Script**
 
-   The easiest way to get started is with **Interactive Mode**:
+   You can run the script from any Linux machine, including the Proxmox host itself. The script handles both remote (SSH) and local execution automatically.
 
+   **The Easiest Way - Interactive Mode** (Recommended):
    ```bash
    ./Scripts/build.sh --interactive
    ```
 
-   This will prompt you for:
-   - Deployment method (SSH with password, SSH with key, or Ansible)
-   - Whether to run Packer customization phase
-   - Configuration file location (defaults to `.env.local`)
-   - SSH key path (if using key-based auth)
-   - Starting VMID (default: 800)
-   - Storage pool name (default: local-lvm)
+   This will guide you through all configuration options interactively.
 
-3. **OR: Run with Explicit Parameters**
+3. **Or: Run with CLI Arguments**
 
-   **SSH Mode (Password Authentication)**:
+   Specify all settings as command-line arguments:
+
    ```bash
-   export PROXMOX_HOST=pve.local
-   export PROXMOX_SSH_USER=root
-   export PROXMOX_SSH_PASSWORD="your_password"
-   export PROXMOX_API_TOKEN_ID="packer@pam!packer_token"
-   export PROXMOX_API_TOKEN_SECRET="your_api_token_secret"
-   ./Scripts/build.sh
+   ./Scripts/build.sh \
+     --proxmox-host=pve.local \
+     --proxmox-user=root \
+     --proxmox-password="your_password" \
+     --storage=local-lvm
    ```
 
-   **SSH Mode (Key-Based Authentication)**:
-   ```bash
-   export PROXMOX_HOST=pve.local
-   export PROXMOX_SSH_USER=root
-   export PROXMOX_API_TOKEN_ID="packer@pam!packer_token"
-   export PROXMOX_API_TOKEN_SECRET="your_api_token_secret"
-   ./Scripts/build.sh --ssh-key=/path/to/private/key
-   ```
+### Interactive Mode Guide
 
-   **Ansible Mode**:
-   ```bash
-   export PROXMOX_HOST=pve.local
-   ./Scripts/build.sh --ansible
-   ```
+The **Interactive Mode** (`./Scripts/build.sh --interactive`) is the easiest way to get started. It will prompt you for the following in order:
 
-   **Standalone on Proxmox Host** (copy proxmox.sh directly to Proxmox):
-   ```bash
-   ./proxmox.sh --vmid=800 --storage=local-lvm --build=debian12,ubuntu2404
-   ```
+#### 1. Which templates do you want to generate?
+Choose which Linux distributions to create templates for. Options include:
+- `all` - Create templates for all supported distros
+- `debian` - All Debian versions (11, 12, 13)
+- `ubuntu` - All Ubuntu versions (22.04, 24.04, 25.04)
+- Individual names: `debian11`, `debian12`, `debian13`, `ubuntu2204`, `ubuntu2404`, `ubuntu2504`, `fedora41`, `rocky9`
 
-4. **Create Environment Configuration Files** (Optional - for non-interactive use)
+Example: `debian12,ubuntu2404` to create only Debian 12 and Ubuntu 24.04 templates
 
-   Create `.env.local` with your Proxmox settings:
-   ```bash
-   export PROXMOX_HOST=pve.local
-   export PROXMOX_HOST_NODE=pve
-   export PROXMOX_SSH_USER=root
-   export PROXMOX_SSH_PASSWORD="your_password"
-   # OR for key-based auth, omit PROXMOX_SSH_PASSWORD and use: ./build.sh --ssh-key=/path/to/key
-   export PROXMOX_API_TOKEN_ID="packer@pam!packer_token"
-   export PROXMOX_API_TOKEN_SECRET="your_api_token_secret"
-   export PROXMOX_STORAGE_POOL=local-lvm
-   ```
+#### 2. Do you want to customize the templates with Packer?
+Choose whether to run the Packer customization phase after creating base templates:
+- `Y` - Run Packer to further customize templates with additional packages, configurations, etc.
+- `N` - Create base templates only (faster, basic Cloud-Init setup)
 
-   Edit `Ansible/Variables/vars.yml` for Ansible-mode specific settings and distro selection:
-   ```yaml
-   nVMID: 800
-   PROXMOX_STORAGE_POOL: local-lvm
-   Create_Debian11: 'Y'
-   Create_Debian12: 'Y'
-   Create_Ubuntu2404: 'Y'
-   # ... set others to N to skip
-   ```
+#### 3. Base VMID
+Enter the starting VMID number for your templates (default: 800). The script will automatically assign sequential IDs based on distro offsets:
+- Debian 11-13: base+1, base+2, base+3
+- Ubuntu 22.04-25.04: base+11, base+12, base+13
+- Fedora 41: base+21
+- Rocky 9: base+31
+
+If Packer is enabled, customized versions will use base+100 offset (e.g., 901, 902, 903 for Debian with Packer).
+
+#### 4. Is the Proxmox server remote?
+Choose how the script will connect to Proxmox:
+- `Y` - Connect via SSH (default, works from any machine)
+- `N` - Run locally on the Proxmox host itself (no SSH needed)
+
+If you answer **Yes** (remote), you'll be asked for:
+- **Proxmox Hostname or IP Address** - DNS name or IP of your Proxmox node
+- **SSH Username** - SSH user on Proxmox (usually `root`)
+- **SSH Privatekey Path** - Path to your SSH private key file, or leave blank to use password authentication
+- **SSH Password** - Only prompted if you didn't specify a private key path
+
+#### 5. Storage pool
+Enter the Proxmox storage pool where templates will be stored (default: `local-lvm`). This is asked regardless of whether Proxmox is local or remote.
+
+#### 6. VMID Preview and Rebuild Confirmation
+The script displays all VMIDs that will be created:
+- **Base templates** with asterisk (`*`) are temporary VMs created during the provisioning process
+- **Packer customized** templates (without asterisk) are the final persistent templates
+- You'll be asked if you want to delete existing VMs at these IDs before building (rebuild mode)
+
+#### 7. Packer Configuration (if Packer was enabled)
+If you chose to use Packer, you'll be prompted for:
+- **Proxmox API Token ID** - Format: `username@realm!token_name` (e.g., `packer@pam!packer`)
+- **Proxmox API Token Secret** - The secret generated in Proxmox for the token
+- **Proxmox Host Node** - Which Proxmox node to use (default: `pve`)
+
+#### 8. Cleanup
+Choose whether to clean up temporary build artifacts after the build completes (default: `N`).
+
+### CLI/Command-Line Argument Mode
+
+For automation, scripts, or CI/CD pipelines, specify all options as command-line arguments:
+
+```bash
+./Scripts/build.sh \
+  --proxmox-host=pve.local \
+  --proxmox-user=root \
+  --proxmox-password="password" \
+  --storage=local-lvm \
+  --packer
+```
+
+**Available CLI Arguments**:
+- `--interactive` - Prompt user for all settings interactively
+- `--ansible` - Use Ansible to create templates (Ansible/Playbooks/create_templates.yml) instead of proxmox.sh
+- `--packer` - Enable Packer customization phase
+- `--rebuild` - Delete existing VMs before building (destructive)
+- `--proxmox-host=HOSTNAME` - Proxmox hostname or IP address (default: pve.local)
+- `--proxmox-user=USERNAME` - SSH username for Proxmox (default: root)
+- `--proxmox-password=PASS` - SSH password for Proxmox authentication
+- `--proxmox-key=PATH` - Path to SSH private key for authentication
+- `--storage=POOL` - Proxmox storage pool name (default: local-lvm)
+- `--local` - Run directly on Proxmox host (no SSH needed)
+- `--templates=LIST` - Comma-separated list of templates to build (e.g., debian12,ubuntu2404, all, debian, ubuntu)
+- `--custom-packerfile=PATH` - Path to custom Packer template file (used with --packer)
+
+**Examples**:
+
+```bash
+# Remote Proxmox with SSH password, no Packer
+./Scripts/build.sh \
+  --proxmox-host=pve.local \
+  --proxmox-user=root \
+  --proxmox-password="password"
+
+# Remote Proxmox with SSH key and Packer
+./Scripts/build.sh \
+  --proxmox-host=pve.local \
+  --proxmox-user=root \
+  --proxmox-key=/home/user/.ssh/id_rsa \
+  --packer
+
+# Local Proxmox execution with Packer
+./Scripts/build.sh \
+  --local \
+  --storage=local-lvm \
+  --packer
+
+# Build specific templates only
+./Scripts/build.sh \
+  --proxmox-host=pve.local \
+  --proxmox-user=root \
+  --proxmox-password="password" \
+  --templates=debian12,ubuntu2404
+
+# Build all Debian templates
+./Scripts/build.sh \
+  --proxmox-host=pve.local \
+  --proxmox-user=root \
+  --proxmox-password="password" \
+  --templates=debian
+
+# Using Ansible instead of proxmox.sh
+./Scripts/build.sh \
+  --proxmox-host=pve.local \
+  --proxmox-user=root \
+  --proxmox-password="password" \
+  --ansible \
+  --packer
+
+# With custom Packer template
+./Scripts/build.sh \
+  --proxmox-host=pve.local \
+  --proxmox-user=root \
+  --proxmox-password="password" \
+  --packer \
+  --custom-packerfile=/path/to/custom.pkr.hcl
+
+# With all options specified
+./Scripts/build.sh \
+  --proxmox-host=pve.local \
+  --proxmox-user=root \
+  --proxmox-key=/home/user/.ssh/id_rsa \
+  --storage=local-lvm \
+  --templates=all \
+  --packer \
+  --rebuild
+```
 
 ## Usage Examples
 
 ### build.sh Script
 
-The `build.sh` script is your main entry point and supports multiple modes and options.
+The `build.sh` script is your main entry point and supports two primary modes:
 
-**Interactive Mode** (Recommended for first-time users):
+#### Interactive Mode (Recommended)
+
+**Simplest approach** - Just run and answer prompts. Note: `--interactive` **cannot be mixed** with other arguments:
 ```bash
 ./Scripts/build.sh --interactive
 ```
 
-**SSH Mode with Password** (Requires PROXMOX_SSH_PASSWORD):
+You'll be guided through:
+1. Which templates to create
+2. Whether to use Packer customization
+3. Base VMID
+4. Whether Proxmox is remote or local
+5. SSH/authentication settings (if remote)
+6. Storage pool
+7. Rebuild confirmation with full VMID preview
+8. Packer configuration (if enabled)
+9. Cleanup preference
+
+#### CLI/Command-Line Argument Mode
+
+For automation, scripts, or CI/CD pipelines, specify all options as command-line arguments. **Do not use `--interactive`** with other arguments:
+
 ```bash
-./Scripts/build.sh --packer --env
+./Scripts/build.sh \
+  --proxmox-host=pve.local \
+  --proxmox-user=root \
+  --proxmox-password="password" \
+  --storage=local-lvm \
+  --packer
 ```
 
-**SSH Mode with Key** (Requires SSH private key):
 ```bash
-./Scripts/build.sh --packer --ssh-key=/home/user/.ssh/id_rsa --env
-```
-
-**Ansible Mode** (No SSH password/key needed):
-```bash
-./Scripts/build.sh --ansible --packer
-```
-
-**Build Specific Distros Only** (Via environment variables or config file):
-```bash
-export Download_Debian12=1
-export Download_Ubuntu2404=1
-./Scripts/build.sh
-```
-
-**Without Packer Customization** (Just create base templates):
-```bash
+export PROXMOX_HOST=pve.local
+export PROXMOX_SSH_USER=root
+export PROXMOX_SSH_PASSWORD="password"
+export PROXMOX_API_TOKEN_ID="packer@pam!packer"
+export PROXMOX_API_TOKEN_SECRET="secret"
+export PROXMOX_STORAGE_POOL=local-lvm
+export nVMID=800
+export Download_Debian12=Y
+export Download_Ubuntu2404=Y
 ./Scripts/build.sh --env
-# This will only create base templates via proxmox.sh, no Packer phase
 ```
 
-**With Rebuild Flag** (Delete existing VMs before building - destructive):
-```bash
-./Scripts/build.sh --rebuild --env
-# Use this when you want to completely replace existing templates
-```
+**Common flags for CLI mode**:
+- `--env` - Load all settings from environment variables
+- `--packer` - Enable Packer customization phase
+- `--rebuild` - Delete existing VMs before building (destructive)
 
-**Without Rebuild Flag** (Safe - preserves existing VMs, default behavior):
+**Examples**:
+
 ```bash
+# Remote Proxmox with SSH password, no Packer
+export PROXMOX_HOST=pve.local
+export PROXMOX_SSH_USER=root
+export PROXMOX_SSH_PASSWORD="password"
 ./Scripts/build.sh --env
-# Existing VMs at target VMIDs are NOT deleted, so existing templates are preserved
+
+# Remote Proxmox with SSH key and Packer
+export PROXMOX_HOST=pve.local
+export PROXMOX_SSH_USER=root
+export SSH_PRIVATE_KEY_PATH="/home/user/.ssh/id_rsa"
+export PROXMOX_API_TOKEN_ID="packer@pam!packer"
+export PROXMOX_API_TOKEN_SECRET="secret"
+./Scripts/build.sh --env --packer
+
+# Local Proxmox execution with Packer
+export PROXMOX_IS_REMOTE=false
+export PROXMOX_STORAGE_POOL=local-lvm
+export PROXMOX_API_TOKEN_ID="packer@pam!packer"
+export PROXMOX_API_TOKEN_SECRET="secret"
+./Scripts/build.sh --env --packer
+
+# Build specific distros only
+export PROXMOX_HOST=pve.local
+export PROXMOX_SSH_USER=root
+export PROXMOX_SSH_PASSWORD="password"
+export Download_Debian12=Y
+export Download_Ubuntu2404=Y
+# Explicitly set others to N to skip them
+export Download_Debian11=N
+export Download_Debian13=N
+./Scripts/build.sh --env
 ```
 
 ### proxmox.sh Script
 
-The `proxmox.sh` script creates the base templates on Proxmox. It can be run:
+The `proxmox.sh` script creates base templates. It's normally executed automatically by `build.sh`, but can be run directly:
 
 **Remotely via SSH** (from build.sh):
 ```bash
-# This is what build.sh does automatically
 ./proxmox.sh --vmid=800 --storage=local-lvm --build=debian12,ubuntu2404
 ```
 
-**Locally on Proxmox Host** (copy file directly to Proxmox and run):
+**Locally on Proxmox host**:
 ```bash
 # On your management machine:
 scp proxmox.sh root@pve.local:/root/
 
 # Then SSH into Proxmox and run:
 ssh root@pve.local
-cd /root
 ./proxmox.sh --vmid=800 --storage=local-lvm --build=debian12,ubuntu2404
 ```
 
 **proxmox.sh CLI Options**:
-- `--vmid=NUM`: Starting VMID for templates (default: 800)
-- `--storage=NAME`: Storage pool name (default: local-lvm)
-- `--build=LIST`: Comma-separated distro names (default: all enabled distros)
+- `--vmid=NUM` - Starting VMID (default: 800)
+- `--storage=NAME` - Storage pool name (default: local-lvm)
+- `--build=LIST` - Comma-separated distro names (default: all)
   - Individual: `debian11`, `debian12`, `debian13`, `ubuntu2204`, `ubuntu2404`, `ubuntu2504`, `fedora41`, `rocky9`
-  - Groups: `debian` (all Debian), `ubuntu` (all Ubuntu), `rhel` (Fedora/Rocky)
+  - Groups: `debian` (all Debian), `ubuntu` (all Ubuntu)
   - Example: `--build=debian12,ubuntu2404,fedora41`
-- `--rebuild`: Delete existing VMs at target VMIDs before building (destructive operation)
-  - **Without this flag (default)**: Existing VMs are preserved, preventing accidental deletion
-  - **With this flag**: Old VMs are destroyed before creating new ones
+- `--rebuild` - Delete existing VMs at target VMIDs before building
+  - Without this flag (default): Existing VMs are preserved
+  - With this flag: Old VMs are destroyed before creating new ones
 
-**Example with rebuild**:
+**Example**:
 ```bash
 ./proxmox.sh --vmid=800 --storage=local-lvm --build=debian12,ubuntu2404 --rebuild
-```
-
-### Ansible Playbooks
-
-**Create Templates via Ansible** (alternative to SSH):
-```bash
-ansible-playbook Ansible/Playbooks/create_templates.yml
-```
-
-**Override Variables**:
-```bash
-ansible-playbook Ansible/Playbooks/create_templates.yml \
-  -e "nVMID=900" \
-  -e "Create_Debian12=Y" \
-  -e "Create_Ubuntu2404=Y"
-```
-
-**From Proxmox Host** (if running Ansible locally on Proxmox):
-```bash
-ansible-playbook -i localhost, -c local Ansible/Playbooks/create_templates.yml
 ```
 
 ### Distro Information

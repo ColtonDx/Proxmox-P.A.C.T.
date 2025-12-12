@@ -43,29 +43,37 @@ USE_ANSIBLE=false
 RUN_PACKER=false
 REBUILD=false
 INTERACTIVE_MODE=false
-USE_ENV_VARS=false
-CONFIG_FILE="./Options.ini"
 SSH_PRIVATE_KEY_PATH=""
+PROXMOX_IS_REMOTE=true
+CUSTOM_PACKERFILE=""
+BUILD_TEMPLATES=""
 
 print_usage() {
     cat <<EOF
 Usage: $0 [OPTIONS]
 
 Options:
-  --ansible         Skip SSH to Proxmox and skip running proxmox.sh. Use Ansible only.
-  --packer          Run Packer builds for image customization.
-  --rebuild         Delete existing VMs before building new ones (destructive).
-  --interactive     Prompt the user to choose between SSH and Ansible, and whether to run Packer.
-  --config=PATH     Path to config file (default: ./Options.ini). Ignored if --env is set.
-  --env             Load all variables from environment variables instead of config file.
-  --ssh-key=PATH    Path to SSH private key for authentication. If not provided, password auth is used.
-  --help            Show this help and exit
+  --interactive              Prompt the user for all settings interactively.
+  --ansible                  Use Ansible to create templates (Ansible/Playbooks/create_templates.yml).
+  --packer                   Run Packer builds for image customization.
+  --rebuild                  Delete existing VMs before building new ones (destructive).
+  --proxmox-host=HOSTNAME    Proxmox hostname or IP address (default: pve.local).
+  --proxmox-user=USERNAME    SSH username for Proxmox (default: root).
+  --proxmox-password=PASS    SSH password for Proxmox authentication.
+  --proxmox-key=PATH         Path to SSH private key for authentication.
+  --storage=POOL             Proxmox storage pool name (default: local-lvm).
+  --local                    Run directly on Proxmox host (no SSH needed).
+  --templates=LIST           Comma-separated list of templates to build (e.g., debian12,ubuntu2404).
+  --custom-packerfile=PATH   Path to custom Packer template file instead of default.
+  --help                     Show this help and exit
 
 Notes:
-  - If --interactive is set, --ansible and --packer are ignored.
-  - Without any flags, defaults to SSH mode (password auth) without Packer.
-  - If --env is set, --config is ignored.
+  - If --interactive is set, no other arguments are allowed (it overrides everything).
+  - --ansible uses Ansible playbooks instead of proxmox.sh (SSH will be skipped).
+  - Without --local, defaults to SSH mode (remote Proxmox).
   - Without --rebuild, existing VMs at target VMIDs are preserved (safer).
+  - --templates accepts: all, debian, ubuntu, individual names (debian11, debian12, etc.)
+  - --custom-packerfile allows using a custom Packer template with --packer.
 EOF
 }
 
@@ -84,14 +92,29 @@ for arg in "$@"; do
         --interactive)
             INTERACTIVE_MODE=true
             ;;
-        --config=*)
-            CONFIG_FILE="${arg#*=}"
+        --proxmox-host=*)
+            PROXMOX_HOST="${arg#*=}"
             ;;
-        --env)
-            USE_ENV_VARS=true
+        --proxmox-user=*)
+            PROXMOX_SSH_USER="${arg#*=}"
             ;;
-        --ssh-key=*)
+        --proxmox-password=*)
+            PROXMOX_SSH_PASSWORD="${arg#*=}"
+            ;;
+        --proxmox-key=*)
             SSH_PRIVATE_KEY_PATH="${arg#*=}"
+            ;;
+        --storage=*)
+            PROXMOX_STORAGE_POOL="${arg#*=}"
+            ;;
+        --local)
+            PROXMOX_IS_REMOTE=false
+            ;;
+        --templates=*)
+            BUILD_TEMPLATES="${arg#*=}"
+            ;;
+        --custom-packerfile=*)
+            CUSTOM_PACKERFILE="${arg#*=}"
             ;;
         --help)
             print_usage
@@ -105,27 +128,94 @@ for arg in "$@"; do
     esac
 done
 
-# Load configuration file or environment variables
-if [ "$USE_ENV_VARS" = true ]; then
-    echo "Loading variables from environment variables..."
-else
-    # Load config file if it exists (default or custom)
-    if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
-        echo "Loading variables from config file: $CONFIG_FILE"
-        # shellcheck disable=SC1090
-        source "$CONFIG_FILE"
-    else
-        echo "Config file not found or not specified. Using defaults and environment variables."
+# Validate that --interactive is not mixed with other arguments
+if [ "$INTERACTIVE_MODE" = true ]; then
+    # Check if any other non-help arguments were provided
+    other_args=false
+    for arg in "$@"; do
+        case "$arg" in
+            --interactive|--help)
+                continue
+                ;;
+            *)
+                other_args=true
+                break
+                ;;
+        esac
+    done
+    
+    if [ "$other_args" = true ]; then
+        echo "Error: --interactive cannot be mixed with other arguments" >&2
+        echo "Use either: ./build.sh --interactive" >&2
+        echo "Or use: ./build.sh [OPTIONS] (without --interactive)" >&2
+        exit 1
     fi
 fi
 
-# Set defaults for unset variables
-: "${PROXMOX_SSH_AUTH_METHOD:=password}"
+# Set defaults for unset variables (CLI arguments take precedence)
 : "${PROXMOX_SSH_USER:=root}"
 : "${PROXMOX_HOST:=pve.local}"
 : "${PROXMOX_HOST_NODE:=pve}"
 : "${PROXMOX_STORAGE_POOL:=local-lvm}"
 : "${nVMID:=800}"
+
+# Initialize distro flags
+Download_DEBIAN_11="N"
+Download_DEBIAN_12="N"
+Download_DEBIAN_13="N"
+Download_UBUNTU_2204="N"
+Download_UBUNTU_2404="N"
+Download_UBUNTU_2504="N"
+Download_FEDORA_41="N"
+Download_ROCKY_LINUX_9="N"
+
+# Parse BUILD_TEMPLATES from CLI if provided
+if [ -n "$BUILD_TEMPLATES" ]; then
+    # Default to all if BUILD_TEMPLATES is empty in non-interactive mode
+    if [ "$BUILD_TEMPLATES" = "all" ]; then
+        Download_DEBIAN_11="Y"
+        Download_DEBIAN_12="Y"
+        Download_DEBIAN_13="Y"
+        Download_UBUNTU_2204="Y"
+        Download_UBUNTU_2404="Y"
+        Download_UBUNTU_2504="Y"
+        Download_FEDORA_41="Y"
+        Download_ROCKY_LINUX_9="Y"
+    else
+        # Parse comma-separated list
+        items="$(echo "$BUILD_TEMPLATES" | tr ',' ' ')"
+        INVALID_ITEMS=""
+        for it in $items; do
+            case "$it" in
+                debian)
+                    Download_DEBIAN_11="Y"
+                    Download_DEBIAN_12="Y"
+                    Download_DEBIAN_13="Y"
+                    ;;
+                debian11) Download_DEBIAN_11="Y" ;;
+                debian12) Download_DEBIAN_12="Y" ;;
+                debian13) Download_DEBIAN_13="Y" ;;
+                ubuntu)
+                    Download_UBUNTU_2204="Y"
+                    Download_UBUNTU_2404="Y"
+                    Download_UBUNTU_2504="Y"
+                    ;;
+                ubuntu2204) Download_UBUNTU_2204="Y" ;;
+                ubuntu2404) Download_UBUNTU_2404="Y" ;;
+                ubuntu2504) Download_UBUNTU_2504="Y" ;;
+                fedora41) Download_FEDORA_41="Y" ;;
+                rocky9) Download_ROCKY_LINUX_9="Y" ;;
+                *) INVALID_ITEMS="$INVALID_ITEMS $it" ;;
+            esac
+        done
+        
+        if [ -n "$INVALID_ITEMS" ]; then
+            echo "Error: Unknown template(s):$INVALID_ITEMS" >&2
+            echo "Valid options: all, debian, ubuntu, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9" >&2
+            exit 1
+        fi
+    fi
+fi
 
 #####################################################################################
 # INTERACTIVE MODE
@@ -245,7 +335,7 @@ if [ "$INTERACTIVE_MODE" = true ]; then
             PROXMOX_SSH_USER="$ssh_user_input"
         fi
         
-        read -p "SSH Privatekey Path (press Enter for password authentication): " -r ssh_key_input
+        read -p "SSH Privatekey Path (leave blank for password authentication): " -r ssh_key_input
         if [ -n "$ssh_key_input" ]; then
             SSH_PRIVATE_KEY_PATH="$ssh_key_input"
         else
@@ -350,17 +440,7 @@ if [ "$INTERACTIVE_MODE" = true ]; then
         CLEANUP_BUILD_VMS=true
     fi
     
-    # Set flag to skip config file loading
-    USE_ENV_VARS=true
     echo ""
-fi
-
-# Validate required variables for Packer
-if [ "$RUN_PACKER" = true ]; then
-    if [ -z "$PACKER_TOKEN_ID" ] || [ -z "$PACKER_TOKEN_SECRET" ]; then
-        echo "Error: PACKER_TOKEN_ID and PACKER_TOKEN_SECRET are required when using --packer" >&2
-        exit 1
-    fi
 fi
 
 # Validate required variables for Packer
@@ -373,13 +453,13 @@ fi
 
 # Display configuration
 echo "Build Configuration:"
-echo "  Use Ansible: $USE_ANSIBLE"
+echo "  Proxmox Host: $PROXMOX_HOST"
+echo "  Proxmox SSH User: $PROXMOX_SSH_USER"
+echo "  Proxmox Is Remote: $PROXMOX_IS_REMOTE"
+echo "  Storage Pool: $PROXMOX_STORAGE_POOL"
+echo "  Base VMID: $nVMID"
 echo "  Run Packer: $RUN_PACKER"
 echo "  Rebuild VMs: $REBUILD"
-echo "  Using environment variables: $USE_ENV_VARS"
-if [ "$USE_ENV_VARS" = false ]; then
-    echo "  Config file: $CONFIG_FILE"
-fi
 echo ""
 
 #####################################################################################
@@ -413,8 +493,9 @@ start_packer() {
 packer_build() {
     local distro_name="$1"
     local vmid="$2"
+    local packerfile="${CUSTOM_PACKERFILE:-./Packer/Templates/universal.pkr.hcl}"
     
-    packer init "./Packer/Templates/universal.pkr.hcl"
+    packer init "$packerfile"
     packer build -var-file=./Packer/Variables/vars.json \
         -var "proxmox_host_node=$PROXMOX_HOST_NODE" \
         -var "proxmox_api_url=https://${PROXMOX_HOST}:8006/api2/json" \
@@ -423,7 +504,7 @@ packer_build() {
         -var "vmid=$vmid" \
         -var "storage_pool=$PROXMOX_STORAGE_POOL" \
         -var "distro=$distro_name" \
-        "./Packer/Templates/universal.pkr.hcl"
+        "$packerfile"
 }
 
 # Detect the distribution of the runner
