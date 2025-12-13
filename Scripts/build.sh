@@ -598,12 +598,12 @@ if [ "$PROXMOX_IS_REMOTE" = true ]; then
                 fi
                 ;;
             centos|rocky|almalinux|fedora|rhel)
-                if ! rpm -q "$pkg" &> /dev/null; then
+                if ! dnf list installed "$pkg" &> /dev/null; then
                     PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL $pkg"
                 fi
                 ;;
             opensuse|sles)
-                if ! rpm -q "$pkg" &> /dev/null; then
+                if ! zypper se -i "$pkg" &> /dev/null; then
                     PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL $pkg"
                 fi
                 ;;

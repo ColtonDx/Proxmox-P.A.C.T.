@@ -203,9 +203,7 @@ build {
     provisioner "shell" {
         inline = [
             "while [ ! -f /var/lib/cloud/instance/boot-finished ]; do echo 'Waiting for cloud-init...'; sleep 1; done",
-            local.config.update_cmd,
-            "export ANSIBLE_HOST_KEY_CHECKING=False",
-            "export ANSIBLE_REMOTE_TEMP=/tmp/.ansible"
+            "${local.config.update_cmd}"
         ]
     }
 
@@ -221,7 +219,7 @@ build {
         inline = [
             "sudo rm /etc/ssh/ssh_host_*",
             "sudo truncate -s 0 /etc/machine-id",
-            local.config.clean_cmd,
+            "${local.config.clean_cmd}",
             "sudo cloud-init clean",
             "sudo rm -f /etc/cloud/cloud.cfg.d/subiquity-disable-cloudinit-networking.cfg",
             "sudo rm -f /etc/NetworkManager/system-connections/*",
