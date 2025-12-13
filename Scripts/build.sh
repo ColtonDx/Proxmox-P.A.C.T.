@@ -587,36 +587,62 @@ if [ "$PROXMOX_IS_REMOTE" = true ]; then
         PACKAGES="$PACKAGES wget unzip git curl"
     fi
 
-    # Install packages based on distribution
-    echo "Installing required packages: $PACKAGES"
-    case "$OS" in
-        ubuntu|debian)
-            sudo apt-get update > /dev/null 2>&1
-            sudo apt-get install -y $PACKAGES
-            if [ $? -ne 0 ]; then
-                echo "Error: Failed to install packages. Please install manually: $PACKAGES" >&2
+    # Check which packages are already installed
+    PACKAGES_TO_INSTALL=""
+    for pkg in $PACKAGES; do
+        case "$OS" in
+            ubuntu|debian)
+                if ! dpkg -l | grep -q "^ii.*$pkg"; then
+                    PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL $pkg"
+                fi
+                ;;
+            centos|rocky|almalinux|fedora|rhel)
+                if ! rpm -q "$pkg" &> /dev/null; then
+                    PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL $pkg"
+                fi
+                ;;
+            opensuse|sles)
+                if ! rpm -q "$pkg" &> /dev/null; then
+                    PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL $pkg"
+                fi
+                ;;
+        esac
+    done
+
+    # Only install if there are packages to install
+    if [ -n "$PACKAGES_TO_INSTALL" ]; then
+        echo "Installing required packages:$PACKAGES_TO_INSTALL"
+        case "$OS" in
+            ubuntu|debian)
+                sudo apt-get update > /dev/null 2>&1
+                sudo apt-get install -y $PACKAGES_TO_INSTALL
+                if [ $? -ne 0 ]; then
+                    echo "Error: Failed to install packages. Please install manually:$PACKAGES_TO_INSTALL" >&2
+                    exit 1
+                fi
+                ;;
+            centos|rocky|almalinux|fedora|rhel)
+                sudo dnf install -y $PACKAGES_TO_INSTALL
+                if [ $? -ne 0 ]; then
+                    echo "Error: Failed to install packages. Please install manually:$PACKAGES_TO_INSTALL" >&2
+                    exit 1
+                fi
+                ;;
+            opensuse|sles)
+                sudo zypper install -y $PACKAGES_TO_INSTALL
+                if [ $? -ne 0 ]; then
+                    echo "Error: Failed to install packages. Please install manually:$PACKAGES_TO_INSTALL" >&2
+                    exit 1
+                fi
+                ;;
+            *)
+                echo "Unsupported distribution: $OS"
                 exit 1
-            fi
-            ;;
-        centos|rocky|almalinux|fedora|rhel)
-            sudo dnf install -y $PACKAGES
-            if [ $? -ne 0 ]; then
-                echo "Error: Failed to install packages. Please install manually: $PACKAGES" >&2
-                exit 1
-            fi
-            ;;
-        opensuse|sles)
-            sudo zypper install -y $PACKAGES
-            if [ $? -ne 0 ]; then
-                echo "Error: Failed to install packages. Please install manually: $PACKAGES" >&2
-                exit 1
-            fi
-            ;;
-        *)
-            echo "Unsupported distribution: $OS"
-            exit 1
-            ;;
-    esac
+                ;;
+        esac
+    else
+        echo "All required packages are already installed."
+    fi
 fi
 
 # Verify sshpass is available if needed
