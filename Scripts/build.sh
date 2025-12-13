@@ -516,6 +516,8 @@ start_packer() {
         
         local vmid=$((VMID_BASE + 100 + offset))
         packer_build "$distro_name" "$vmid"
+    done
+}
 
 #Function that runs Packer Build with Environment variable parameters
 packer_build() {
