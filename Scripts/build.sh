@@ -517,14 +517,15 @@ start_packer() {
         fi
         
         local vmid=$((VMID_BASE + 100 + offset))
-        packer_build "$distro_name" "$vmid"
+        packer_build "$distro_id" "$vmid" "$distro_name"
     done
 }
 
 #Function that runs Packer Build with Environment variable parameters
 packer_build() {
-    local distro_name="$1"
+    local distro_id="$1"
     local vmid="$2"
+    local distro_name="$3"
     local packerfile="${CUSTOM_PACKERFILE:-./Packer/Templates/universal.pkr.hcl}"
     local ansiblefile="${CUSTOM_ANSIBLE_PLAYBOOK:-./Ansible/Playbooks/image_customizations.yml}"
     local ansiblevarfile="${CUSTOM_ANSIBLE_VARFILE:-./Ansible/Variables/vars.yml}"
@@ -548,7 +549,7 @@ packer_build() {
         -var "proxmox_api_token_secret=$PACKER_TOKEN_SECRET" \
         -var "vmid=$vmid" \
         -var "storage_pool=$PROXMOX_STORAGE" \
-        -var "distro=$distro_name" \
+        -var "distro=$distro_id" \
         -var "custom_ansible_playbook=$ansiblefile" \
         -var "custom_ansible_varfile=$ansiblevarfile" \
         "$packerfile"
