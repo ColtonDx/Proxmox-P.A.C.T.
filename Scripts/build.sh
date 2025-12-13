@@ -550,8 +550,8 @@ packer_build() {
         -var "vmid=$vmid" \
         -var "storage_pool=$PROXMOX_STORAGE" \
         -var "distro=$distro_id" \
-        -var "custom_ansible_playbook=$ansiblefile" \
-        -var "custom_ansible_varfile=$ansiblevarfile" \
+        -var "ansible_playbook=$ansiblefile" \
+        -var "ansible_varfile=$ansiblevarfile" \
         "$packerfile"
     
     if [ $? -ne 0 ]; then

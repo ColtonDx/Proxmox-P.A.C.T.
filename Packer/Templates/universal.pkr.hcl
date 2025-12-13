@@ -64,16 +64,16 @@ variable "distro" {
     description = "Distribution to build (debian11, debian12, debian13, ubuntu2204, ubuntu2205, ubuntu2404, ubuntu2504, fedora41, rocky9)"
 }
 
-variable "custom_ansible_playbook" {
+variable "ansible_playbook" {
     type = string
     default = "./Ansible/Playbooks/image_customizations.yml"
-    description = "Path to custom Ansible playbook for template customization"
+    description = "Path to Ansible playbook for template customization"
 }
 
-variable "custom_ansible_varfile" {
+variable "ansible_varfile" {
     type = string
     default = "./Ansible/Variables/vars.yml"
-    description = "Path to custom Ansible variables file for playbook"
+    description = "Path to Ansible variables file for playbook"
 }
 
 # Locals for distro-specific configuration
@@ -181,9 +181,9 @@ build {
 
     # Run Ansible playbook for customization (handles updates and configuration)
     provisioner "ansible" {
-        playbook_file = var.custom_ansible_playbook
+        playbook_file = var.ansible_playbook
         use_proxy = false
-        extra_arguments = ["-e", "@${var.custom_ansible_varfile}", "-e", "distro=${var.distro}"]
+        extra_arguments = ["-e", "@${var.ansible_varfile}", "-e", "distro=${var.distro}"]
     }
 
     # Generalize the Image
