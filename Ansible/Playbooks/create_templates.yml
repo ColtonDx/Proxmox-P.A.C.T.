@@ -1,0 +1,150 @@
+---
+################################################################################
+# Proxmox Template Creation Playbook
+#
+# This playbook creates Proxmox VM templates from cloud images.
+# It downloads images, installs necessary tools, and sets up VMs as templates.
+#
+# Variables required (from vars.yml):
+#   - nVMID: Base VMID for templates (default: 800)
+#   - PROXMOX_STORAGE_POOL: Storage pool name (default: local-lvm)
+#   - Create_DEBIAN_11: Whether to create Debian 11 template (Y/N)
+#   - Create_DEBIAN_12: Whether to create Debian 12 template (Y/N)
+#   - Create_DEBIAN_13: Whether to create Debian 13 template (Y/N)
+#   - Create_UBUNTU_2204: Whether to create Ubuntu 22.04 template (Y/N)
+#   - Create_UBUNTU_2205: Whether to create Ubuntu 22.05 template (Y/N)
+#   - Create_UBUNTU_2404: Whether to create Ubuntu 24.04 template (Y/N)
+#   - Create_UBUNTU_2504: Whether to create Ubuntu 25.04 template (Y/N)
+#   - Create_FEDORA_41: Whether to create Fedora 41 template (Y/N)
+#   - Create_ROCKY_LINUX_9: Whether to create Rocky Linux 9 template (Y/N)
+#
+################################################################################
+
+- name: Create Proxmox VM Templates
+  hosts: localhost
+  gather_facts: no
+  vars_files:
+    - ../Variables/vars.yml
+
+  pre_tasks:
+    - name: Set default values if not provided
+      set_fact:
+        nVMID: "{{ nVMID | default(800) | int }}"
+        PROXMOX_STORAGE_POOL: "{{ PROXMOX_STORAGE_POOL | default('local-lvm') }}"
+        workingdir: "./workingdir"
+
+    - name: Create working directory
+      file:
+        path: "{{ workingdir }}"
+        state: directory
+
+    - name: Install required packages
+      package:
+        name:
+          - libguestfs-tools
+          - curl
+        state: present
+      become: yes
+
+    - name: Display template creation configuration
+      debug:
+        msg: |
+          Creating templates with:
+          - Base VMID: {{ nVMID }}
+          - Storage Pool: {{ PROXMOX_STORAGE_POOL }}
+
+  tasks:
+    - name: Create Debian 11 Template
+      include_tasks: tasks/create_template.yml
+      vars:
+        template_name: "Template-Debian-11"
+        vmid: "{{ nVMID + 1 }}"
+        vmid_custom: "{{ nVMID + 101 }}"
+        image_filename: "debian-11-template.qcow2"
+        image_url: "https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-genericcloud-amd64.qcow2"
+      when: Create_DEBIAN_11 | default('N') == 'Y'
+
+    - name: Create Debian 12 Template
+      include_tasks: tasks/create_template.yml
+      vars:
+        template_name: "Template-Debian-12"
+        vmid: "{{ nVMID + 2 }}"
+        vmid_custom: "{{ nVMID + 102 }}"
+        image_filename: "debian-12-template.qcow2"
+        image_url: "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2"
+      when: Create_DEBIAN_12 | default('N') == 'Y'
+
+    - name: Create Debian 13 Template
+      include_tasks: tasks/create_template.yml
+      vars:
+        template_name: "Template-Debian-13"
+        vmid: "{{ nVMID + 3 }}"
+        vmid_custom: "{{ nVMID + 103 }}"
+        image_filename: "debian-13-template.qcow2"
+        image_url: "https://cloud.debian.org/images/cloud/trixie/daily/latest/debian-13-genericcloud-amd64-daily.qcow2"
+      when: Create_DEBIAN_13 | default('N') == 'Y'
+
+    - name: Create Ubuntu 22.04 Template
+      include_tasks: tasks/create_template.yml
+      vars:
+        template_name: "Template-Ubuntu-2204"
+        vmid: "{{ nVMID + 11 }}"
+        vmid_custom: "{{ nVMID + 111 }}"
+        image_filename: "ubuntu-2204-template.img"
+        image_url: "https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img"
+      when: Create_UBUNTU_2204 | default('N') == 'Y'
+
+    - name: Create Ubuntu 22.05 Template
+      include_tasks: tasks/create_template.yml
+      vars:
+        template_name: "Template-Ubuntu-2205"
+        vmid: "{{ nVMID + 14 }}"
+        vmid_custom: "{{ nVMID + 114 }}"
+        image_filename: "ubuntu-2205-template.img"
+        image_url: "https://cloud-images.ubuntu.com/releases/22.05/release/ubuntu-22.05-server-cloudimg-amd64.img"
+      when: Create_UBUNTU_2205 | default('N') == 'Y'
+
+    - name: Create Ubuntu 24.04 Template
+      include_tasks: tasks/create_template.yml
+      vars:
+        template_name: "Template-Ubuntu-2404"
+        vmid: "{{ nVMID + 12 }}"
+        vmid_custom: "{{ nVMID + 112 }}"
+        image_filename: "ubuntu-2404-template.img"
+        image_url: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img"
+      when: Create_UBUNTU_2404 | default('N') == 'Y'
+
+    - name: Create Ubuntu 25.04 Template
+      include_tasks: tasks/create_template.yml
+      vars:
+        template_name: "Template-Ubuntu-2504"
+        vmid: "{{ nVMID + 13 }}"
+        vmid_custom: "{{ nVMID + 113 }}"
+        image_filename: "ubuntu-2504-template.img"
+        image_url: "https://cloud-images.ubuntu.com/releases/plucky/release/ubuntu-25.04-server-cloudimg-amd64.img"
+      when: Create_UBUNTU_2504 | default('N') == 'Y'
+
+    - name: Create Fedora 41 Template
+      include_tasks: tasks/create_template.yml
+      vars:
+        template_name: "Template-Fedora-41"
+        vmid: "{{ nVMID + 21 }}"
+        vmid_custom: "{{ nVMID + 121 }}"
+        image_filename: "fedora-41-template.qcow2"
+        image_url: "https://fedora.mirror.constant.com/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2"
+      when: Create_FEDORA_41 | default('N') == 'Y'
+
+    - name: Create Rocky Linux 9 Template
+      include_tasks: tasks/create_template.yml
+      vars:
+        template_name: "Template-Rocky-9"
+        vmid: "{{ nVMID + 31 }}"
+        vmid_custom: "{{ nVMID + 131 }}"
+        image_filename: "rocky-9-template.qcow2"
+        image_url: "http://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud.latest.x86_64.qcow2"
+      when: Create_ROCKY_LINUX_9 | default('N') == 'Y'
+
+  post_tasks:
+    - name: Template creation complete
+      debug:
+        msg: "All requested templates have been created successfully"

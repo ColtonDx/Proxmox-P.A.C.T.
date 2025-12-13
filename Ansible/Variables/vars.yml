@@ -1,2 +1,18 @@
-VM_USERNAME: "sampleuser"
-VM_PUBKEY: "PASTE YOUR PUBKEY HERE"
+---
+# Proxmox Template Creation Variables
+
+# Proxmox Configuration
+nVMID: 800                              # Base VMID for templates
+PROXMOX_STORAGE_POOL: "local-lvm"      # Storage pool for templates
+
+# Template Creation Settings
+# Set to 'Y' to create, 'N' to skip
+Create_DEBIAN_11: "N"
+Create_DEBIAN_12: "Y"
+Create_DEBIAN_13: "Y"
+Create_UBUNTU_2204: "Y"
+Create_UBUNTU_2205: "N"
+Create_UBUNTU_2404: "Y"
+Create_UBUNTU_2504: "N"
+Create_FEDORA_41: "N"
+Create_ROCKY_LINUX_9: "N"
