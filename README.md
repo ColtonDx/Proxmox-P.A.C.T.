@@ -10,9 +10,9 @@ The workflow has three deployment modes for template creation:
 ### SSH Mode (Default)
 1. **On your management machine**: 
    - Reads configuration from CLI arguments, interactive mode, or from an answerfile
-   - Builds a list of distros to process based on enabled options or explicit `--build` parameter
+   - Builds a list of distros to process based on enabled options or explicit `--templates` parameter
    - Connects to Proxmox via SSH using password or key-based authentication
-   - Uploads `proxmox.sh` script with CLI parameters (`--vmid`, `--storage`, `--build`)
+   - Uploads `proxmox.sh` script with CLI parameters (`--vmid-base`, `--proxmox-storage`, `--build`)
    - Executes proxmox.sh remotely
 
 2. **On Proxmox**:
@@ -56,10 +56,11 @@ After base templates are created (regardless of whether SSH or Ansible mode was 
     - `--ansible`: Use Ansible instead of SSH/proxmox.sh for template creation (optional alternative)
     - `--rebuild`: Delete existing VMs before rebuilding (prevents accidental deletion without this flag)
   - **proxmox.sh**: Executed on Proxmox host to create base templates. Accepts CLI parameters:
-    - `--vmid=NUM`: Starting VMID (default: 800)
-    - `--storage=NAME`: Storage pool name (default: local-lvm)
-    - `--build=LIST`: Comma-separated distro list (default: all enabled)
+    - `--vmid-base=NUM`: Starting VMID (default: 800)
+    - `--proxmox-storage=NAME`: Storage pool name (default: local-lvm)
+    - `--build=LIST`: Comma-separated distro list (default: all)
     - `--rebuild`: Delete existing VMs before building (safe by default without this flag)
+    - `--run-packer`: Enable Packer customization phase
   - **proxmox-updated.sh**: Alias/copy of proxmox.sh for reference
 
 - **Packer/**
@@ -394,7 +395,7 @@ The `proxmox.sh` script creates base templates. It's normally executed automatic
 
 **Remotely via SSH** (from build.sh):
 ```bash
-./proxmox.sh --vmid=800 --storage=local-lvm --build=debian12,ubuntu2404
+./proxmox.sh --vmid-base=800 --proxmox-storage=local-lvm --build=debian12,ubuntu2404
 ```
 
 **Locally on Proxmox host**:
@@ -404,12 +405,12 @@ scp proxmox.sh root@pve.local:/root/
 
 # Then SSH into Proxmox and run:
 ssh root@pve.local
-./proxmox.sh --vmid=800 --storage=local-lvm --build=debian12,ubuntu2404
+./proxmox.sh --vmid-base=800 --proxmox-storage=local-lvm --build=debian12,ubuntu2404
 ```
 
 **proxmox.sh CLI Options**:
-- `--vmid=NUM` - Starting VMID (default: 800)
-- `--storage=NAME` - Storage pool name (default: local-lvm)
+- `--vmid-base=NUM` - Starting VMID (default: 800)
+- `--proxmox-storage=NAME` - Storage pool name (default: local-lvm)
 - `--build=LIST` - Comma-separated distro names (default: all)
   - Individual: `debian11`, `debian12`, `debian13`, `ubuntu2204`, `ubuntu2404`, `ubuntu2504`, `fedora41`, `rocky9`
   - Groups: `debian` (all Debian), `ubuntu` (all Ubuntu)
@@ -420,7 +421,7 @@ ssh root@pve.local
 
 **Example**:
 ```bash
-./proxmox.sh --vmid=800 --storage=local-lvm --build=debian12,ubuntu2404 --rebuild
+./proxmox.sh --vmid-base=800 --proxmox-storage=local-lvm --build=debian12,ubuntu2404 --rebuild
 ```
 
 ### Distro Information

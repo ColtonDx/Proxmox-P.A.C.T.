@@ -1,15 +1,60 @@
 #!/bin/bash
 
-#This is the script that will be run on the Proxmox server to create the VM templates.
+################################################################################
+# Proxmox Template Creation Script
+#
+# This script is executed on the Proxmox server to download cloud images and
+# create VM templates with cloud-init and QEMU-guest-agent support.
+#
+# Normally executed remotely by build.sh via SSH, but can also be run locally
+# on the Proxmox host directly.
+#
+# CLI Arguments:
+#   --vmid-base=NUM             Base VMID for templates (default: 800)
+#                               Also accepts: --vmid=NUM (for backward compatibility)
+#   --proxmox-storage=NAME      Storage pool name (default: local-lvm)
+#                               Also accepts: --storage=NAME (for backward compatibility)
+#   --build=LIST                Comma-separated list of distros to create
+#                               Options: all, debian, ubuntu, or individual names
+#                               Example: debian12,ubuntu2404,fedora41
+#   --rebuild                   Delete existing VMs before building (destructive)
+#   --run-packer                Packer will customize templates after creation
+#                               Also accepts: --packer-enabled (for backward compatibility)
+#   --help                      Display help message
+#
+# Distro Options:
+#   Individual: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9
+#   Groups:     debian (all Debian versions), ubuntu (all Ubuntu versions)
+#   Special:    all (create all distros)
+#
+# VMIDs Assignment (with default VMID_BASE=800):
+#   debian11: 801,   debian12: 802,   debian13: 803
+#   ubuntu2204: 811, ubuntu2404: 812, ubuntu2504: 813
+#   fedora41: 821,   rocky9: 831
+#
+# If Packer is enabled (--run-packer), customized VMs get base+100 offset
+# Example: debian12 base template = 802, Packer customized = 902
+#
+# Usage Examples:
+#   # Create Debian 12 and Ubuntu 24.04 templates
+#   ./proxmox.sh --vmid-base=800 --proxmox-storage=local-lvm --build=debian12,ubuntu2404
+#
+#   # Create all templates and enable Packer customization
+#   ./proxmox.sh --vmid-base=800 --proxmox-storage=local-lvm --build=all --run-packer
+#
+#   # Rebuild existing templates (delete and recreate)
+#   ./proxmox.sh --vmid-base=800 --proxmox-storage=local-lvm --build=debian --rebuild
+#
+################################################################################
 
 # --- CLI parameter handling ---
 # Defaults if not provided on the command line
-DEFAULT_VMID=800
-DEFAULT_STORAGE="local-lvm"
+DEFAULT_VMID_BASE=800
+DEFAULT_PROXMOX_STORAGE="local-lvm"
 
 # Define distro metadata: id|name|vmid_offset|filename|download_url
 # The id field is used for filtering (debian11, ubuntu2404, etc.)
-declare -a DISTROS=(
+declare -a DISTRO_METADATA=(
     "debian11|Debian-11|1|debian-11-template.qcow2|https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-genericcloud-amd64.qcow2"
     "debian12|Debian-12|2|debian-12-template.qcow2|https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2"
     "debian13|Debian-13|3|debian-13-template.qcow2|https://cloud.debian.org/images/cloud/trixie/daily/latest/debian-13-genericcloud-amd64-daily.qcow2"
@@ -29,11 +74,11 @@ declare -A DISTRO_GROUPS=(
 
 print_usage() {
         cat <<EOF
-Usage: $0 [--vmid=800] [--storage=local-lvm] [--build=LIST] [--rebuild] [--packer-enabled]
+Usage: $0 [--vmid-base=800] [--proxmox-storage=local-lvm] [--build=LIST] [--rebuild] [--run-packer]
 
 Options:
-    --vmid=NUM        Base VMID to use. Defaults to ${DEFAULT_VMID}.
-    --storage=NAME    Storage pool to use. Defaults to ${DEFAULT_STORAGE}.
+    --vmid-base=NUM        Base VMID to use. Defaults to ${DEFAULT_VMID_BASE}.
+    --proxmox-storage=NAME Storage pool to use. Defaults to ${DEFAULT_PROXMOX_STORAGE}.
     --build=LIST      Comma-separated list of distros to build. Special values:
                         all      - build every distro (default)
                         debian   - debian11, debian12, debian13
@@ -41,33 +86,32 @@ Options:
                       Individual names: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9
     --rebuild         Delete existing VMs at target VMIDs before building (destructive).
                       Without this flag, existing VMs are preserved.
-    --packer-enabled  Packer will be used for customization. Checks both base and packer VMIDs.
+    --run-packer      Packer will be used for customization. Checks both base and packer VMIDs.
     --help            Show this help and exit
 EOF
 }
 
 # Defaults (may be overridden by Options.ini earlier)
-VMID="${DEFAULT_VMID}"
-STORAGE="${PROXMOX_STORAGE:-$DEFAULT_STORAGE}"
+VMID_BASE="${DEFAULT_VMID_BASE}"
+PROXMOX_STORAGE="${PROXMOX_STORAGE:-$DEFAULT_PROXMOX_STORAGE}"
 BUILD_LIST="all"
 REBUILD=false
-PACKER_ENABLED=false
+RUN_PACKER=false
 
 for arg in "$@"; do
     case "$arg" in
-        --vmid=*) VMID="${arg#*=}" ;;
-        --storage=*) STORAGE="${arg#*=}" ;;
+        --vmid-base=*) VMID_BASE="${arg#*=}" ;;
+        --vmid=*) VMID_BASE="${arg#*=}" ;;
+        --proxmox-storage=*) PROXMOX_STORAGE="${arg#*=}" ;;
+        --storage=*) PROXMOX_STORAGE="${arg#*=}" ;;
         --build=*) BUILD_LIST="${arg#*=}" ;;
         --rebuild) REBUILD=true ;;
-        --packer-enabled) PACKER_ENABLED=true ;;
+        --run-packer) RUN_PACKER=true ;;
+        --packer-enabled) RUN_PACKER=true ;;
         --help) print_usage; exit 0 ;;
         *) echo "Unknown option: $arg"; print_usage; exit 1 ;;
     esac
 done
-
-# Apply parsed values
-VMID_BASE="${VMID}"
-STORAGE_POOL="${STORAGE}"
 
 # Parse build list and populate selected distros
 SELECTED_DISTROS=""
@@ -94,7 +138,7 @@ fi
 # Remove duplicates and normalize spacing
 SELECTED_DISTROS="$(echo "$SELECTED_DISTROS" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)"
 
-echo "Using VMID_BASE=${VMID_BASE}, storage=${STORAGE_POOL}, build='${BUILD_LIST}', selected='${SELECTED_DISTROS}', rebuild=${REBUILD}, packer-enabled=${PACKER_ENABLED}"
+echo "Using VMID_BASE=${VMID_BASE}, storage=${PROXMOX_STORAGE}, build='${BUILD_LIST}', selected='${SELECTED_DISTROS}', rebuild=${REBUILD}, run-packer=${RUN_PACKER}"
 
 # Create and configure a VM template
 create_template() {
@@ -102,7 +146,7 @@ create_template() {
     local template_name="$2"
     local filename="$3"
     local download_url="$4"
-    local storage="$5"
+    local proxmox_storage="$5"
     
     echo "Downloading the Image"
     curl -L -o ./workingdir/"$filename" "$download_url" > /dev/null 2>&1
@@ -116,10 +160,10 @@ create_template() {
     qm set "$vmid" --net0 virtio,bridge=vmbr0
     qm set "$vmid" --serial0 socket --vga serial0
     qm set "$vmid" --memory 1024 --cores 4 --cpu host
-    qm set "$vmid" --scsi0 "${storage}:0,import-from=/root/workingdir/$filename,discard=on" > /dev/null 2>&1
+    qm set "$vmid" --scsi0 "${proxmox_storage}:0,import-from=/root/workingdir/$filename,discard=on" > /dev/null 2>&1
     qm set "$vmid" --boot order=scsi0 --scsihw virtio-scsi-single
     qm set "$vmid" --agent enabled=1,fstrim_cloned_disks=1
-    qm set "$vmid" --ide3 "${storage}:cloudinit"
+    qm set "$vmid" --ide3 "${proxmox_storage}:cloudinit"
     qm disk resize "$vmid" scsi0 8G
     qm template "$vmid"
 }
@@ -142,19 +186,19 @@ manage_vmid_lifecycle() {
     if [ "$REBUILD" = true ]; then
         qm destroy "$vmid" 2>/dev/null
         # Only destroy packer VMID if packer is enabled
-        if [ "$PACKER_ENABLED" = true ]; then
+        if [ "$RUN_PACKER" = true ]; then
             qm destroy "$((vmid + 100))" 2>/dev/null
         fi
     else
         # Check base VMID
         if check_vmid_exists "$vmid"; then
-            echo "Error: VMID $vmid is already in use. Use --rebuild to replace it, or choose a different nVMID." >&2
+            echo "Error: VMID $vmid is already in use. Use --rebuild to replace it, or choose a different VMID_BASE." >&2
             return 1
         fi
         # Check packer VMID only if packer is enabled
-        if [ "$PACKER_ENABLED" = true ]; then
+        if [ "$RUN_PACKER" = true ]; then
             if check_vmid_exists "$((vmid + 100))"; then
-                echo "Error: Packer VMID $((vmid + 100)) is already in use. Use --rebuild to replace it, or choose a different nVMID." >&2
+                echo "Error: Packer VMID $((vmid + 100)) is already in use. Use --rebuild to replace it, or choose a different VMID_BASE." >&2
                 return 1
             fi
         fi
@@ -165,7 +209,7 @@ manage_vmid_lifecycle() {
 apt-get install libguestfs-tools -y > /dev/null 2>&1
 
 # Process all selected distros
-for distro_config in "${DISTROS[@]}"; do
+for distro_config in "${DISTRO_METADATA[@]}"; do
     IFS='|' read -r distro_id distro_name offset filename url <<< "$distro_config"
     
     # Check if this distro was selected for building
@@ -183,5 +227,5 @@ for distro_config in "${DISTROS[@]}"; do
     
     # Build the template
     echo "Creating base ${distro_name} Template"
-    create_template "$vmid" "$template_name" "$filename" "$url" "$STORAGE_POOL"
+    create_template "$vmid" "$template_name" "$filename" "$url" "$PROXMOX_STORAGE"
 done

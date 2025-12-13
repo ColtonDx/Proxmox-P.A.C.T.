@@ -55,19 +55,23 @@
 #
 # Answerfile (.env.local) variables:
 #   PROXMOX_HOST                   Proxmox hostname (overridden by CLI args)
+#   PROXMOX_HOST_NODE              Proxmox cluster node name (default: pve)
 #   PROXMOX_SSH_USER               SSH username (overridden by CLI args)
 #   PROXMOX_SSH_PASSWORD           SSH password (overridden by CLI args)
 #   SSH_PRIVATE_KEY_PATH           SSH key path (overridden by CLI args)
 #   PROXMOX_STORAGE                Storage pool name (overridden by CLI args)
-#   VMID_BASE                      Base VMID (overridden by CLI args)
+#   VMID_BASE                      Base VMID for templates (overridden by CLI args)
 #   BUILD_LIST                     Distros to build, comma-separated (overridden by CLI args)
-#   RUN_PACKER                     Enable Packer (true/false)
-#   REBUILD                        Delete existing VMs (true/false)
-#   PACKER_TOKEN_ID                Proxmox API Token ID
-#   PACKER_TOKEN_SECRET            Proxmox API Token Secret
-#   CUSTOM_PACKERFILE              Custom Packer template path
-#   CUSTOM_ANSIBLE_PLAYBOOK        Custom Ansible playbook path
-#   CUSTOM_ANSIBLE_VARFILE         Custom Ansible variables path
+#   PROXMOX_IS_REMOTE              Use SSH to Proxmox (true/false, default: true)
+#   USE_ANSIBLE                    Use Ansible instead of proxmox.sh (true/false, default: false)
+#   RUN_PACKER                     Enable Packer customization (true/false, default: false)
+#   REBUILD                        Delete existing VMs before building (true/false, default: false)
+#   PACKER_TOKEN_ID                Proxmox API Token ID (required if RUN_PACKER=true)
+#   PACKER_TOKEN_SECRET            Proxmox API Token Secret (required if RUN_PACKER=true)
+#   PACKER_HOST_NODE               Proxmox host node for Packer (default: pve)
+#   CUSTOM_PACKERFILE              Custom Packer template path (optional)
+#   CUSTOM_ANSIBLE_PLAYBOOK        Custom Ansible playbook for Packer (optional)
+#   CUSTOM_ANSIBLE_VARFILE         Custom Ansible variables file for Packer (optional)
 #
 ################################################################################
 
@@ -696,16 +700,16 @@ fi
 # Run proxmox.sh to create templates (SSH to remote or run locally)
 if [ "$PROXMOX_IS_REMOTE" = true ]; then
     # Build proxmox.sh arguments based on configuration
-    PROXMOX_SCRIPT_ARGS="--vmid=$VMID_BASE --storage=$PROXMOX_STORAGE"
+    PROXMOX_SCRIPT_ARGS="--vmid-base=$VMID_BASE --proxmox-storage=$PROXMOX_STORAGE"
     
     # Add rebuild flag if enabled
     if [ "$REBUILD" = true ]; then
         PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --rebuild"
     fi
     
-    # Add packer-enabled flag if Packer will be run
+    # Add run-packer flag if Packer will be run
     if [ "$RUN_PACKER" = true ]; then
-        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --packer-enabled"
+        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --run-packer"
     fi
     
     # Add build list to arguments
@@ -753,14 +757,14 @@ else
     echo "Running proxmox.sh locally..."
     
     # Build proxmox.sh arguments
-    PROXMOX_SCRIPT_ARGS="--vmid=$VMID_BASE --storage=$PROXMOX_STORAGE"
+    PROXMOX_SCRIPT_ARGS="--vmid-base=$VMID_BASE --proxmox-storage=$PROXMOX_STORAGE"
     
     if [ "$REBUILD" = true ]; then
         PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --rebuild"
     fi
     
     if [ "$RUN_PACKER" = true ]; then
-        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --packer-enabled"
+        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --run-packer"
     fi
     
     # Add build list to arguments
