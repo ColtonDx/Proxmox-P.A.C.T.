@@ -128,6 +128,7 @@ locals {
 
   config = local.distro_config[var.distro]
   build_time = timestamp()
+  storage_pool = var.storage_pool
 }
 
 # Resource Definition for the VM Template
@@ -164,7 +165,7 @@ source "proxmox-clone" "vm" {
 
     # VM Cloud-Init Settings
     cloud_init = true
-    cloud_init_storage_pool = "${var.storage_pool}"
+    cloud_init_storage_pool = local.storage_pool
 }
 
 # Build Definition to create the VM Template

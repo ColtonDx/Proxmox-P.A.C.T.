@@ -591,23 +591,39 @@ if [ "$PROXMOX_IS_REMOTE" = true ]; then
     # Check which packages are already installed
     PACKAGES_TO_INSTALL=""
     for pkg in $PACKAGES; do
+        pkg_installed=false
+        
         case "$OS" in
             ubuntu|debian)
-                if ! dpkg -l | grep -q "^ii.*$pkg"; then
-                    PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL $pkg"
+                # Check if package is installed via dpkg
+                if dpkg -l | grep -q "^ii.*$pkg"; then
+                    pkg_installed=true
                 fi
                 ;;
             centos|rocky|almalinux|fedora|rhel)
-                if ! dnf list installed "$pkg" &> /dev/null; then
-                    PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL $pkg"
+                # Check if package is installed via dnf
+                if dnf list installed "$pkg" &> /dev/null; then
+                    pkg_installed=true
                 fi
                 ;;
             opensuse|sles)
-                if ! zypper se -i "$pkg" &> /dev/null; then
-                    PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL $pkg"
+                # Check if package is installed via zypper
+                if zypper se -i "$pkg" &> /dev/null; then
+                    pkg_installed=true
                 fi
                 ;;
         esac
+        
+        # For wget specifically, also check if the command is available
+        if [ "$pkg" = "wget" ]; then
+            if command -v wget &> /dev/null || command -v wget2 &> /dev/null; then
+                pkg_installed=true
+            fi
+        fi
+        
+        if [ "$pkg_installed" = false ]; then
+            PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL $pkg"
+        fi
     done
 
     # Only install if there are packages to install
