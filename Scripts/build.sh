@@ -535,19 +535,13 @@ packer_build() {
         return 1
     fi
     
-    # Check if vars.json exists
-    if [ ! -f "./Packer/Variables/vars.json" ]; then
-        echo "Error: Packer variables file not found: ./Packer/Variables/vars.json" >&2
-        return 1
-    fi
-    
     packer init "$packerfile"
     if [ $? -ne 0 ]; then
         echo "Error: Packer init failed" >&2
         return 1
     fi
     
-    packer build -var-file=./Packer/Variables/vars.json \
+    packer build \
         -var "proxmox_host_node=$PROXMOX_HOST_NODE" \
         -var "proxmox_api_url=https://${PROXMOX_HOST}:8006/api2/json" \
         -var "proxmox_api_token_id=$PACKER_TOKEN_ID" \
