@@ -120,15 +120,6 @@ declare -A DISTRO_GROUPS=(
 # Selected distros to build (space-separated list of distro IDs)
 SELECTED_DISTROS=""
 
-# Source answerfile if it exists (.env.local by default, or custom path via CLI)
-# This allows users to pre-configure variables instead of using CLI args or interactive mode
-# Answerfile values are loaded here and can be overridden by CLI arguments below
-ANSWERFILE_PATH="${ANSWERFILE:-.env.local}"
-if [ -f "$ANSWERFILE_PATH" ]; then
-    echo "Loading configuration from $ANSWERFILE_PATH..."
-    source "$ANSWERFILE_PATH"
-fi
-
 print_usage() {
     cat <<EOF
 Usage: $0 [OPTIONS]
@@ -228,6 +219,17 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+# Source answerfile if it exists (.env.local by default, or custom path via --answerfile)
+# This allows users to pre-configure variables instead of using CLI args or interactive mode
+# Answerfile values are loaded here and can be overridden by CLI arguments passed above
+ANSWERFILE_PATH="${ANSWERFILE:-.env.local}"
+# Expand tilde in path
+ANSWERFILE_PATH="${ANSWERFILE_PATH/#\~/$HOME}"
+if [ -f "$ANSWERFILE_PATH" ]; then
+    echo "Loading configuration from $ANSWERFILE_PATH..."
+    source "$ANSWERFILE_PATH"
+fi
 
 # Validate that --interactive is not mixed with other arguments
 if [ "$INTERACTIVE_MODE" = true ]; then
