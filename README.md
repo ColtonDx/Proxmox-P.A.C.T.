@@ -1,5 +1,5 @@
 # Proxmox Packer Ansible CloudInit Templates - Proxmox P.A.C.T.
-<img src="Images/th.jpg" alt="Application Logo" width="200"/>
+<img src="Images/Logo.jpg" alt="Application Logo" width="200"/>
 
 P.A.C.T. stands for Packer Ansible CloudInit Templates, for Proxmox! P.A.C.T. creates a series of Linux VM Templates on your Proxmox instance from a variety of distros and versions. These templates will be preconfigured for CloudInit making it so that things like resizing the filesystem or forgetting your password can easily be handled from the Proxmox web interface. We will also preinstall the QEMU-GUEST-AGENT service so that the VMs interact with Proxmox without having the dreaded "Could not get a Lock" issue. These templates will also leverage both Packer and Ansible to generalize and update the images. These Ansible and Packer configurations are easily customized by the user to allow you to make your own custom templates using whichever tool is easiest for you.
 
