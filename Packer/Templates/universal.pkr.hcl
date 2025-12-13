@@ -83,46 +83,73 @@ locals {
       template_name  = "Template-Debian-11"
       vm_name        = "PACT-Debian-11"
       build_name     = "Debian11-Packer"
+      package_manager = "apt"
+      update_cmd     = "apt-get update -y"
+      clean_cmd      = "apt-get -y autoremove --purge && apt-get clean"
     }
     debian12 = {
       template_name  = "Template-Debian-12"
       vm_name        = "PACT-Debian-12"
       build_name     = "Debian12-Packer"
+      package_manager = "apt"
+      update_cmd     = "apt-get update -y"
+      clean_cmd      = "apt-get -y autoremove --purge && apt-get clean"
     }
     debian13 = {
       template_name  = "Template-Debian-13"
       vm_name        = "PACT-Debian-13"
       build_name     = "Debian13-Packer"
+      package_manager = "apt"
+      update_cmd     = "apt-get update -y"
+      clean_cmd      = "apt-get -y autoremove --purge && apt-get clean"
     }
     ubuntu2204 = {
       template_name  = "Template-Ubuntu-2204"
       vm_name        = "PACT-Ubuntu-2204"
       build_name     = "Ubuntu2204-Packer"
+      package_manager = "apt"
+      update_cmd     = "apt-get update -y"
+      clean_cmd      = "apt-get -y autoremove --purge && apt-get clean"
     }
     ubuntu2205 = {
       template_name  = "Template-Ubuntu-2205"
       vm_name        = "PACT-Ubuntu-2205"
       build_name     = "Ubuntu2205-Packer"
+      package_manager = "apt"
+      update_cmd     = "apt-get update -y"
+      clean_cmd      = "apt-get -y autoremove --purge && apt-get clean"
     }
     ubuntu2404 = {
       template_name  = "Template-Ubuntu-2404"
       vm_name        = "PACT-Ubuntu-2404"
       build_name     = "Ubuntu2404-Packer"
+      package_manager = "apt"
+      update_cmd     = "apt-get update -y"
+      clean_cmd      = "apt-get -y autoremove --purge && apt-get clean"
     }
     ubuntu2504 = {
       template_name  = "Template-Ubuntu-2504"
       vm_name        = "PACT-Ubuntu-2504"
       build_name     = "Ubuntu2504-Packer"
+      package_manager = "apt"
+      update_cmd     = "apt-get update -y"
+      clean_cmd      = "apt-get -y autoremove --purge && apt-get clean"
     }
     fedora41 = {
       template_name  = "Template-Fedora-41"
       vm_name        = "PACT-Fedora-41"
       build_name     = "Fedora41-Packer"
+      package_manager = "dnf"
+      update_cmd     = "dnf update -y"
+      clean_cmd      = "dnf autoremove -y && dnf clean all"
     }
     rocky9 = {
       template_name  = "Template-Rocky-9"
       vm_name        = "PACT-Rocky-9"
       build_name     = "Rocky9-Packer"
+      package_manager = "dnf"
+      update_cmd     = "dnf update -y"
+      clean_cmd      = "dnf autoremove -y && dnf clean all"
     }
   }
 
@@ -163,9 +190,13 @@ source "proxmox-clone" "vm" {
         firewall = "false"
     }
 
+    ipconfig {
+      ip = "dhcp"
+          }
+
     # VM Cloud-Init Settings
     cloud_init = true
-    cloud_init_storage_pool = ${var.storage_pool}"
+    cloud_init_storage_pool = "${var.storage_pool}"
 }
 
 # Build Definition to create the VM Template
@@ -192,6 +223,7 @@ build {
         inline = [
             "sudo rm -f /etc/ssh/ssh_host_*",
             "sudo truncate -s 0 /etc/machine-id",
+            "local.config.clean_cmd",
             "sudo cloud-init clean",
             "sudo rm -f /etc/cloud/cloud.cfg.d/subiquity-disable-cloudinit-networking.cfg",
             "sudo rm -f /etc/NetworkManager/system-connections/*",
