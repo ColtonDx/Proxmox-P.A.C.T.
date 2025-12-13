@@ -4,50 +4,70 @@
 # Proxmox-P.A.C.T. Build Script
 #
 # This script orchestrates the complete build process for creating Proxmox VM
-# templates and customizing them with Packer. It supports:
+# templates and customizing them with Packer. It supports three configuration modes:
 #
-#  - Two primary modes:
-#    * Interactive mode: Prompts user for all settings
-#    * CLI argument mode: Pass all settings as command-line arguments
+#  - Interactive mode: Prompts user for all settings
+#  - CLI arguments: Pass settings directly (--proxmox-host=, --templates=, etc.)
+#  - Answerfile: Load from .env.local configuration file
 #
-#  - Multiple template creation methods:
-#    * SSH mode (default): SSH to Proxmox and run proxmox.sh to create templates
-#    * Ansible mode (--ansible): Use Ansible playbooks instead of proxmox.sh
-#    * Local mode (--local): Run directly on Proxmox host without SSH
+# Multiple template creation methods:
+#  * SSH mode (default): SSH to Proxmox and run proxmox.sh to create templates
+#  * Local mode (--local): Run directly on Proxmox host without SSH
+#  * Ansible mode (--ansible): Use Ansible playbooks instead of proxmox.sh
 #
-#  - Optional Packer customization:
-#    * --packer: Enable Packer customization phase with API tokens
-#    * --custom-packerfile: Use custom Packer template instead of default
-#    * --custom-ansible: Use custom Ansible playbook for Packer customization
-#    * --custom-ansible-varfile: Use custom variables file for Ansible playbook
+# Optional Packer customization:
+#  * --packer: Enable Packer customization phase with API tokens
+#  * --custom-packerfile: Use custom Packer template instead of default
+#  * --custom-ansible: Use custom Ansible playbook for Packer customization
+#  * --custom-ansible-varfile: Use custom variables file for Ansible playbook
 #
-#  - Smart dependency management:
-#    * Installs only required packages based on selected options
-#    * Installs Packer only if --packer is specified
+# Smart dependency management:
+#  * Installs only required packages based on selected options
+#  * Installs Packer only if --packer is specified
 #
 # Usage: ./build.sh [OPTIONS]
 #
-# Two modes (mutually exclusive):
-#   --interactive              Prompt user for all settings (cannot mix with other args)
-#   [CLI arguments]            Specify settings directly via command-line arguments
+# Configuration modes (choose one):
+#   ./build.sh --interactive       Prompts for all settings interactively
+#   ./build.sh [CLI arguments]     Use command-line arguments directly
+#   ./build.sh                     Load from .env.local (if exists), then prompts missing values
+#   ./build.sh --answerfile=FILE   Load from custom answerfile, then prompts missing values
 #
 # CLI argument options:
-#   --ansible                  Use Ansible instead of SSH for template creation
-#   --packer                   Enable Packer customization phase
-#   --rebuild                  Delete existing VMs before rebuilding (destructive)
-#   --local                    Run directly on Proxmox host (no SSH needed)
-#   --proxmox-host=HOSTNAME    Proxmox hostname or IP address
-#   --proxmox-user=USERNAME    SSH username for Proxmox (default: root)
-#   --proxmox-password=PASS    SSH password for Proxmox authentication
-#   --proxmox-key=PATH         Path to SSH private key for authentication
-#   --storage=POOL             Proxmox storage pool name
-#   --templates=LIST           Comma-separated list of templates to build
-#   --custom-packerfile=PATH   Path to custom Packer template file
-#   --custom-ansible=PATH      Path to custom Ansible playbook for Packer
+#   --ansible                      Use Ansible instead of SSH for template creation
+#   --packer                       Enable Packer customization phase
+#   --rebuild                      Delete existing VMs before rebuilding (destructive)
+#   --local                        Run directly on Proxmox host (no SSH needed)
+#   --proxmox-host=HOSTNAME        Proxmox hostname or IP address
+#   --proxmox-user=USERNAME        SSH username for Proxmox (default: root)
+#   --proxmox-password=PASS        SSH password for Proxmox authentication
+#   --proxmox-key=PATH             Path to SSH private key for authentication
+#   --proxmox-storage=POOL         Proxmox storage pool name (default: local-lvm)
+#   --templates=LIST               Comma-separated list of distros to build (e.g., debian12,ubuntu2404)
+#                                  Also accepts: all, debian, ubuntu
+#   --answerfile=PATH              Path to custom answerfile (.env.local used by default if exists)
+#   --custom-packerfile=PATH       Path to custom Packer template file
+#   --custom-ansible=PATH          Path to custom Ansible playbook for Packer
 #   --custom-ansible-varfile=PATH  Path to custom variables file for Ansible
-#   --packer-token-id=TOKEN    Proxmox API Token ID for Packer
-#   --packer-token-secret=SEC  Proxmox API Token Secret for Packer
-#   --help                     Show help message
+#   --packer-token-id=TOKEN        Proxmox API Token ID for Packer
+#   --packer-token-secret=SEC      Proxmox API Token Secret for Packer
+#   --help                         Show help message
+#
+# Answerfile (.env.local) variables:
+#   PROXMOX_HOST                   Proxmox hostname (overridden by CLI args)
+#   PROXMOX_SSH_USER               SSH username (overridden by CLI args)
+#   PROXMOX_SSH_PASSWORD           SSH password (overridden by CLI args)
+#   SSH_PRIVATE_KEY_PATH           SSH key path (overridden by CLI args)
+#   PROXMOX_STORAGE                Storage pool name (overridden by CLI args)
+#   VMID_BASE                      Base VMID (overridden by CLI args)
+#   BUILD_LIST                     Distros to build, comma-separated (overridden by CLI args)
+#   RUN_PACKER                     Enable Packer (true/false)
+#   REBUILD                        Delete existing VMs (true/false)
+#   PACKER_TOKEN_ID                Proxmox API Token ID
+#   PACKER_TOKEN_SECRET            Proxmox API Token Secret
+#   CUSTOM_PACKERFILE              Custom Packer template path
+#   CUSTOM_ANSIBLE_PLAYBOOK        Custom Ansible playbook path
+#   CUSTOM_ANSIBLE_VARFILE         Custom Ansible variables path
 #
 ################################################################################
 
@@ -72,26 +92,41 @@ PROXMOX_IS_REMOTE=true
 CUSTOM_PACKERFILE=""
 CUSTOM_ANSIBLE_PLAYBOOK=""
 CUSTOM_ANSIBLE_VARFILE=""
-BUILD_TEMPLATES=""
+BUILD_LIST=""
 PACKER_TOKEN_ID=""
 PACKER_TOKEN_SECRET=""
+ANSWERFILE=""
 
-# Initialize distro flags (BEFORE sourcing answerfile so answerfile can override)
-Download_DEBIAN_11="N"
-Download_DEBIAN_12="N"
-Download_DEBIAN_13="N"
-Download_UBUNTU_2204="N"
-Download_UBUNTU_2404="N"
-Download_UBUNTU_2504="N"
-Download_FEDORA_41="N"
-Download_ROCKY_LINUX_9="N"
+# Define distro metadata: id|name|vmid_offset
+# Maps distro names to their identifiers for easy grouping
+declare -a DISTRO_METADATA=(
+    "debian11|Debian-11|1"
+    "debian12|Debian-12|2"
+    "debian13|Debian-13|3"
+    "ubuntu2204|Ubuntu-22.04|11"
+    "ubuntu2404|Ubuntu-24.04|12"
+    "ubuntu2504|Ubuntu-25.04|13"
+    "fedora41|Fedora-41|21"
+    "rocky9|Rocky-9|31"
+)
 
-# Source answerfile if it exists (.env.local)
+# Map of distro groups to their individual IDs
+declare -A DISTRO_GROUPS=(
+    [debian]="debian11 debian12 debian13"
+    [ubuntu]="ubuntu2204 ubuntu2404 ubuntu2504"
+    [all]="debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 rocky9"
+)
+
+# Selected distros to build (space-separated list of distro IDs)
+SELECTED_DISTROS=""
+
+# Source answerfile if it exists (.env.local by default, or custom path via CLI)
 # This allows users to pre-configure variables instead of using CLI args or interactive mode
 # Answerfile values are loaded here and can be overridden by CLI arguments below
-if [ -f ".env.local" ]; then
-    echo "Loading configuration from .env.local..."
-    source .env.local
+ANSWERFILE_PATH="${ANSWERFILE:-.env.local}"
+if [ -f "$ANSWERFILE_PATH" ]; then
+    echo "Loading configuration from $ANSWERFILE_PATH..."
+    source "$ANSWERFILE_PATH"
 fi
 
 print_usage() {
@@ -107,9 +142,10 @@ Options:
   --proxmox-user=USERNAME    SSH username for Proxmox (default: root).
   --proxmox-password=PASS    SSH password for Proxmox authentication.
   --proxmox-key=PATH         Path to SSH private key for authentication.
-  --storage=POOL             Proxmox storage pool name (default: local-lvm).
+  --proxmox-storage=POOL     Proxmox storage pool name (default: local-lvm).
   --local                    Run directly on Proxmox host (no SSH needed).
   --templates=LIST           Comma-separated list of templates to build (e.g., debian12,ubuntu2404).
+  --answerfile=PATH          Path to custom answerfile (.env.local used by default if exists).
   --custom-packerfile=PATH   Path to custom Packer template file instead of default.
   --custom-ansible=PATH      Path to custom Ansible playbook for template customization.
   --custom-ansible-varfile=PATH  Path to custom variables file for Ansible playbook (default: ./Ansible/Variables/vars.yml).
@@ -154,14 +190,17 @@ for arg in "$@"; do
         --proxmox-key=*)
             SSH_PRIVATE_KEY_PATH="${arg#*=}"
             ;;
-        --storage=*)
-            PROXMOX_STORAGE_POOL="${arg#*=}"
+        --proxmox-storage=*)
+            PROXMOX_STORAGE="${arg#*=}"
             ;;
         --local)
             PROXMOX_IS_REMOTE=false
             ;;
         --templates=*)
-            BUILD_TEMPLATES="${arg#*=}"
+            BUILD_LIST="${arg#*=}"
+            ;;
+        --answerfile=*)
+            ANSWERFILE="${arg#*=}"
             ;;
         --custom-packerfile=*)
             CUSTOM_PACKERFILE="${arg#*=}"
@@ -218,54 +257,32 @@ fi
 : "${PROXMOX_SSH_USER:=root}"
 : "${PROXMOX_HOST:=pve.local}"
 : "${PROXMOX_HOST_NODE:=pve}"
-: "${PROXMOX_STORAGE_POOL:=local-lvm}"
-: "${nVMID:=800}"
+: "${PROXMOX_STORAGE:=local-lvm}"
+: "${VMID_BASE:=800}"
 
-# Parse BUILD_TEMPLATES from CLI if provided
-if [ -n "$BUILD_TEMPLATES" ]; then
-    # Default to all if BUILD_TEMPLATES is empty in non-interactive mode
-    if [ "$BUILD_TEMPLATES" = "all" ]; then
-        Download_DEBIAN_11="Y"
-        Download_DEBIAN_12="Y"
-        Download_DEBIAN_13="Y"
-        Download_UBUNTU_2204="Y"
-        Download_UBUNTU_2404="Y"
-        Download_UBUNTU_2504="Y"
-        Download_FEDORA_41="Y"
-        Download_ROCKY_LINUX_9="Y"
+# Parse BUILD_LIST and populate SELECTED_DISTROS
+# BUILD_LIST can be set via: --templates=, answerfile, or interactive mode
+if [ -n "$BUILD_LIST" ]; then
+    if [ "$BUILD_LIST" = "all" ]; then
+        SELECTED_DISTROS="${DISTRO_GROUPS[all]}"
     else
-        # Parse comma-separated list
-        items="$(echo "$BUILD_TEMPLATES" | tr ',' ' ')"
-        INVALID_ITEMS=""
-        for it in $items; do
-            case "$it" in
-                debian)
-                    Download_DEBIAN_11="Y"
-                    Download_DEBIAN_12="Y"
-                    Download_DEBIAN_13="Y"
-                    ;;
-                debian11) Download_DEBIAN_11="Y" ;;
-                debian12) Download_DEBIAN_12="Y" ;;
-                debian13) Download_DEBIAN_13="Y" ;;
-                ubuntu)
-                    Download_UBUNTU_2204="Y"
-                    Download_UBUNTU_2404="Y"
-                    Download_UBUNTU_2504="Y"
-                    ;;
-                ubuntu2204) Download_UBUNTU_2204="Y" ;;
-                ubuntu2404) Download_UBUNTU_2404="Y" ;;
-                ubuntu2504) Download_UBUNTU_2504="Y" ;;
-                fedora41) Download_FEDORA_41="Y" ;;
-                rocky9) Download_ROCKY_LINUX_9="Y" ;;
-                *) INVALID_ITEMS="$INVALID_ITEMS $it" ;;
-            esac
+        # Parse comma or space separated list
+        items="$(echo "$BUILD_LIST" | tr ',' ' ')"
+        for item in $items; do
+            if [ -n "${DISTRO_GROUPS[$item]}" ]; then
+                # It's a group (debian, ubuntu, etc.)
+                SELECTED_DISTROS="${SELECTED_DISTROS} ${DISTRO_GROUPS[$item]}"
+            elif [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 rocky9 " =~ " $item " ]]; then
+                # It's a valid individual distro
+                SELECTED_DISTROS="${SELECTED_DISTROS} $item"
+            else
+                echo "Error: Unknown template '$item'" >&2
+                echo "Valid options: all, debian, ubuntu, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9" >&2
+                exit 1
+            fi
         done
-        
-        if [ -n "$INVALID_ITEMS" ]; then
-            echo "Error: Unknown template(s):$INVALID_ITEMS" >&2
-            echo "Valid options: all, debian, ubuntu, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9" >&2
-            exit 1
-        fi
+        # Remove duplicates and normalize spacing
+        SELECTED_DISTROS="$(echo "$SELECTED_DISTROS" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)"
     fi
 fi
 
@@ -277,73 +294,47 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     echo ""
     
     # Q1: Ask which images to build
-    echo "Select images to create templates from:"
+    echo "Select distros to create templates from:"
     echo "  Available: all, debian, ubuntu, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9"
     
     # Keep asking until valid input is provided
-    BUILD_IMAGES_VALID=false
-    while [ "$BUILD_IMAGES_VALID" = false ]; do
-        read -p "Enter comma-separated list (or 'all' for all images) [Default: all]: " -r build_images_input
-        if [ -z "$build_images_input" ]; then
-            BUILD_IMAGES="all"
+    BUILD_VALID=false
+    while [ "$BUILD_VALID" = false ]; do
+        read -p "Enter comma-separated list (or 'all' for all distros) [Default: all]: " -r build_input
+        if [ -z "$build_input" ]; then
+            BUILD_INPUT="all"
         else
-            BUILD_IMAGES="$build_images_input"
+            BUILD_INPUT="$build_input"
         fi
         
-        # Initialize all to N
-        Download_DEBIAN_11="N"
-        Download_DEBIAN_12="N"
-        Download_DEBIAN_13="N"
-        Download_UBUNTU_2204="N"
-        Download_UBUNTU_2404="N"
-        Download_UBUNTU_2504="N"
-        Download_FEDORA_41="N"
-        Download_ROCKY_LINUX_9="N"
-        
         # Parse the input
-        if [ "$BUILD_IMAGES" = "all" ]; then
-            Download_DEBIAN_11="Y"
-            Download_DEBIAN_12="Y"
-            Download_DEBIAN_13="Y"
-            Download_UBUNTU_2204="Y"
-            Download_UBUNTU_2404="Y"
-            Download_UBUNTU_2504="Y"
-            Download_FEDORA_41="Y"
-            Download_ROCKY_LINUX_9="Y"
-            BUILD_IMAGES_VALID=true
+        SELECTED_DISTROS=""
+        if [ "$BUILD_INPUT" = "all" ]; then
+            SELECTED_DISTROS="${DISTRO_GROUPS[all]}"
+            BUILD_VALID=true
         else
             # Parse comma-separated list
-            items="$(echo "$BUILD_IMAGES" | tr ',' ' ')"
+            items="$(echo "$BUILD_INPUT" | tr ',' ' ')"
             INVALID_ITEMS=""
             for it in $items; do
-                case "$it" in
-                    debian)
-                        Download_DEBIAN_11="Y"
-                        Download_DEBIAN_12="Y"
-                        Download_DEBIAN_13="Y"
-                        ;;
-                    debian11) Download_DEBIAN_11="Y" ;;
-                    debian12) Download_DEBIAN_12="Y" ;;
-                    debian13) Download_DEBIAN_13="Y" ;;
-                    ubuntu)
-                        Download_UBUNTU_2204="Y"
-                        Download_UBUNTU_2404="Y"
-                        Download_UBUNTU_2504="Y"
-                        ;;
-                    ubuntu2204) Download_UBUNTU_2204="Y" ;;
-                    ubuntu2404) Download_UBUNTU_2404="Y" ;;
-                    ubuntu2504) Download_UBUNTU_2504="Y" ;;
-                    fedora41) Download_FEDORA_41="Y" ;;
-                    rocky9) Download_ROCKY_LINUX_9="Y" ;;
-                    *) INVALID_ITEMS="$INVALID_ITEMS $it" ;;
-                esac
+                if [ -n "${DISTRO_GROUPS[$it]}" ]; then
+                    # It's a group
+                    SELECTED_DISTROS="${SELECTED_DISTROS} ${DISTRO_GROUPS[$it]}"
+                elif [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 rocky9 " =~ " $it " ]]; then
+                    # Valid individual distro
+                    SELECTED_DISTROS="${SELECTED_DISTROS} $it"
+                else
+                    INVALID_ITEMS="$INVALID_ITEMS $it"
+                fi
             done
             
             if [ -n "$INVALID_ITEMS" ]; then
-                echo "Error: Unknown image(s):$INVALID_ITEMS"
-                echo "Please try again with valid images."
+                echo "Error: Unknown distro(s):$INVALID_ITEMS"
+                echo "Valid options: all, debian, ubuntu, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9"
             else
-                BUILD_IMAGES_VALID=true
+                # Remove duplicates
+                SELECTED_DISTROS="$(echo "$SELECTED_DISTROS" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)"
+                BUILD_VALID=true
             fi
         fi
     done
@@ -359,7 +350,7 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     echo ""
     read -p "Base VMID (press Enter for default 800): " -r vmid_input
     if [ -n "$vmid_input" ]; then
-        nVMID="$vmid_input"
+        VMID_BASE="$vmid_input"
     fi
     
     # Q4: Ask if Proxmox is remote
@@ -399,36 +390,26 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     
     # Ask for storage pool (for both remote and local)
     echo ""
-    read -p "Storage pool (press Enter for default 'local-lvm'): " -r storage_input
+    read -p "Proxmox Storage Pool (press Enter for default 'local-lvm'): " -r storage_input
     if [ -n "$storage_input" ]; then
-        PROXMOX_STORAGE_POOL="$storage_input"
+        PROXMOX_STORAGE="$storage_input"
     fi
     
     # Calculate VMIDs for selected distros
     declare -a SELECTED_VMIDS
+    declare -a PACKER_VMIDS
     SELECTED_VMIDS=()
-    [ "$Download_DEBIAN_11" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 1))")
-    [ "$Download_DEBIAN_12" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 2))")
-    [ "$Download_DEBIAN_13" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 3))")
-    [ "$Download_UBUNTU_2204" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 11))")
-    [ "$Download_UBUNTU_2404" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 12))")
-    [ "$Download_UBUNTU_2504" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 13))")
-    [ "$Download_FEDORA_41" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 21))")
-    [ "$Download_ROCKY_LINUX_9" = "Y" ] && SELECTED_VMIDS+=("$((nVMID + 31))")
+    PACKER_VMIDS=()
     
-    # If Packer is enabled, calculate Packer VMIDs
-    if [ "$RUN_PACKER" = true ]; then
-        declare -a PACKER_VMIDS
-        PACKER_VMIDS=()
-        [ "$Download_DEBIAN_11" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 101))")
-        [ "$Download_DEBIAN_12" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 102))")
-        [ "$Download_DEBIAN_13" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 103))")
-        [ "$Download_UBUNTU_2204" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 111))")
-        [ "$Download_UBUNTU_2404" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 112))")
-        [ "$Download_UBUNTU_2504" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 113))")
-        [ "$Download_FEDORA_41" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 121))")
-        [ "$Download_ROCKY_LINUX_9" = "Y" ] && PACKER_VMIDS+=("$((nVMID + 131))")
-    fi
+    for distro_entry in "${DISTRO_METADATA[@]}"; do
+        IFS='|' read -r distro_id distro_name offset <<< "$distro_entry"
+        if [[ " $SELECTED_DISTROS " =~ " $distro_id " ]]; then
+            SELECTED_VMIDS+=("$((VMID_BASE + offset))")
+            if [ "$RUN_PACKER" = true ]; then
+                PACKER_VMIDS+=("$((VMID_BASE + 100 + offset))")
+            fi
+        fi
+    done
     
     # Display VMID information
     echo ""
@@ -499,12 +480,10 @@ if [ "$RUN_PACKER" = true ]; then
     fi
 fi
 
-# Validate that at least one template is selected
-if [ "$Download_DEBIAN_11" != "Y" ] && [ "$Download_DEBIAN_12" != "Y" ] && [ "$Download_DEBIAN_13" != "Y" ] && \
-   [ "$Download_UBUNTU_2204" != "Y" ] && [ "$Download_UBUNTU_2404" != "Y" ] && [ "$Download_UBUNTU_2504" != "Y" ] && \
-   [ "$Download_FEDORA_41" != "Y" ] && [ "$Download_ROCKY_LINUX_9" != "Y" ]; then
-    echo "Error: At least one template must be selected" >&2
-    echo "Use --interactive mode for guidance or set BUILD_TEMPLATES via CLI/answerfile" >&2
+# Validate that at least one distro is selected
+if [ -z "$SELECTED_DISTROS" ]; then
+    echo "Error: At least one distro must be selected" >&2
+    echo "Use --interactive mode for guidance or set BUILD_LIST via CLI/answerfile" >&2
     exit 1
 fi
 
@@ -513,8 +492,9 @@ echo "Build Configuration:"
 echo "  Proxmox Host: $PROXMOX_HOST"
 echo "  Proxmox SSH User: $PROXMOX_SSH_USER"
 echo "  Proxmox Is Remote: $PROXMOX_IS_REMOTE"
-echo "  Storage Pool: $PROXMOX_STORAGE_POOL"
-echo "  Base VMID: $nVMID"
+echo "  Storage Pool: $PROXMOX_STORAGE"
+echo "  Base VMID: $VMID_BASE"
+echo "  Selected Distros: $SELECTED_DISTROS"
 echo "  Run Packer: $RUN_PACKER"
 echo "  Rebuild VMs: $REBUILD"
 echo ""
@@ -523,31 +503,19 @@ echo ""
 ###################FUNCTIONS
 #####################################################################################
 
-#Function to check what Images to customize with Packer.
+#Function to customize selected distros with Packer.
 start_packer() {
-    # Array of distros: "VAR_NAME|distro_name|vmid_offset"
-    local distros=(
-        "Download_DEBIAN_11|debian11|101"
-        "Download_DEBIAN_12|debian12|102"
-        "Download_DEBIAN_13|debian13|103"
-        "Download_UBUNTU_2204|ubuntu2204|111"
-        "Download_UBUNTU_2205|ubuntu2205|114"
-        "Download_UBUNTU_2404|ubuntu2404|112"
-        "Download_UBUNTU_2504|ubuntu2504|113"
-        "Download_FEDORA_41|fedora41|121"
-        "Download_ROCKY_LINUX_9|rocky9|131"
-    )
-
-    for distro in "${distros[@]}"; do
-        IFS='|' read -r var_name distro_name vmid_offset <<< "$distro"
-        if [ "${!var_name}" == "Y" ]; then
-            packer_build "$distro_name" $((nVMID + vmid_offset))
-            if [ $? -ne 0 ]; then
-                return 1
-            fi
+    # Iterate through selected distros
+    for distro_entry in "${DISTRO_METADATA[@]}"; do
+        IFS='|' read -r distro_id distro_name offset <<< "$distro_entry"
+        
+        # Check if this distro was selected
+        if [[ ! " $SELECTED_DISTROS " =~ " $distro_id " ]]; then
+            continue
         fi
-    done
-}
+        
+        local vmid=$((VMID_BASE + 100 + offset))
+        packer_build "$distro_name" "$vmid"
 
 #Function that runs Packer Build with Environment variable parameters
 packer_build() {
@@ -581,7 +549,7 @@ packer_build() {
         -var "proxmox_api_token_id=$PACKER_TOKEN_ID" \
         -var "proxmox_api_token_secret=$PACKER_TOKEN_SECRET" \
         -var "vmid=$vmid" \
-        -var "storage_pool=$PROXMOX_STORAGE_POOL" \
+        -var "storage_pool=$PROXMOX_STORAGE" \
         -var "distro=$distro_name" \
         -var "custom_ansible_playbook=$ansiblefile" \
         -var "custom_ansible_varfile=$ansiblevarfile" \
@@ -687,7 +655,7 @@ fi
 # Run proxmox.sh to create templates (SSH to remote or run locally)
 if [ "$PROXMOX_IS_REMOTE" = true ]; then
     # Build proxmox.sh arguments based on configuration
-    PROXMOX_SCRIPT_ARGS="--vmid=$nVMID --storage=$PROXMOX_STORAGE_POOL"
+    PROXMOX_SCRIPT_ARGS="--vmid=$VMID_BASE --storage=$PROXMOX_STORAGE"
     
     # Add rebuild flag if enabled
     if [ "$REBUILD" = true ]; then
@@ -699,22 +667,7 @@ if [ "$PROXMOX_IS_REMOTE" = true ]; then
         PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --packer-enabled"
     fi
     
-    # Build --build argument based on which distros are enabled
-    BUILD_LIST=""
-    [ "$Download_DEBIAN_11" = "Y" ] && BUILD_LIST="${BUILD_LIST}debian11,"
-    [ "$Download_DEBIAN_12" = "Y" ] && BUILD_LIST="${BUILD_LIST}debian12,"
-    [ "$Download_DEBIAN_13" = "Y" ] && BUILD_LIST="${BUILD_LIST}debian13,"
-    [ "$Download_UBUNTU_2204" = "Y" ] && BUILD_LIST="${BUILD_LIST}ubuntu2204,"
-    [ "$Download_UBUNTU_2205" = "Y" ] && BUILD_LIST="${BUILD_LIST}ubuntu2205,"
-    [ "$Download_UBUNTU_2404" = "Y" ] && BUILD_LIST="${BUILD_LIST}ubuntu2404,"
-    [ "$Download_UBUNTU_2504" = "Y" ] && BUILD_LIST="${BUILD_LIST}ubuntu2504,"
-    [ "$Download_FEDORA_41" = "Y" ] && BUILD_LIST="${BUILD_LIST}fedora41,"
-    [ "$Download_ROCKY_LINUX_9" = "Y" ] && BUILD_LIST="${BUILD_LIST}rocky9,"
-    
-    # Remove trailing comma
-    BUILD_LIST="${BUILD_LIST%,}"
-    
-    # Add build list to arguments if not empty
+    # Add build list to arguments
     if [ -n "$BUILD_LIST" ]; then
         PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --build=$BUILD_LIST"
     fi
@@ -759,7 +712,7 @@ else
     echo "Running proxmox.sh locally..."
     
     # Build proxmox.sh arguments
-    PROXMOX_SCRIPT_ARGS="--vmid=$nVMID --storage=$PROXMOX_STORAGE_POOL"
+    PROXMOX_SCRIPT_ARGS="--vmid=$VMID_BASE --storage=$PROXMOX_STORAGE"
     
     if [ "$REBUILD" = true ]; then
         PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --rebuild"
@@ -769,20 +722,7 @@ else
         PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --packer-enabled"
     fi
     
-    # Build --build argument
-    BUILD_LIST=""
-    [ "$Download_DEBIAN_11" = "Y" ] && BUILD_LIST="${BUILD_LIST}debian11,"
-    [ "$Download_DEBIAN_12" = "Y" ] && BUILD_LIST="${BUILD_LIST}debian12,"
-    [ "$Download_DEBIAN_13" = "Y" ] && BUILD_LIST="${BUILD_LIST}debian13,"
-    [ "$Download_UBUNTU_2204" = "Y" ] && BUILD_LIST="${BUILD_LIST}ubuntu2204,"
-    [ "$Download_UBUNTU_2205" = "Y" ] && BUILD_LIST="${BUILD_LIST}ubuntu2205,"
-    [ "$Download_UBUNTU_2404" = "Y" ] && BUILD_LIST="${BUILD_LIST}ubuntu2404,"
-    [ "$Download_UBUNTU_2504" = "Y" ] && BUILD_LIST="${BUILD_LIST}ubuntu2504,"
-    [ "$Download_FEDORA_41" = "Y" ] && BUILD_LIST="${BUILD_LIST}fedora41,"
-    [ "$Download_ROCKY_LINUX_9" = "Y" ] && BUILD_LIST="${BUILD_LIST}rocky9,"
-    
-    BUILD_LIST="${BUILD_LIST%,}"
-    
+    # Add build list to arguments
     if [ -n "$BUILD_LIST" ]; then
         PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --build=$BUILD_LIST"
     fi
@@ -814,24 +754,17 @@ fi
 if [ "$RUN_PACKER" = true ]; then
     echo "Cleaning up intermediate build VMs..."
     
-    # The intermediate build VMs are at the base VMID offsets (1, 2, 3, 11, 12, 13, 21, 31)
+    # The intermediate build VMs are at the base VMID offsets matching DISTRO_METADATA
     # After Packer creates customized versions at offset+100, we no longer need these
-    declare -a DISTRO_OFFSETS=(1 2 3 11 12 13 21 31)
-    
-    for offset in "${DISTRO_OFFSETS[@]}"; do
-        vmid=$((nVMID + offset))
-        # Check if this distro was selected
-        case $offset in
-            1) [ "$Download_DEBIAN_11" != "Y" ] && continue ;;
-            2) [ "$Download_DEBIAN_12" != "Y" ] && continue ;;
-            3) [ "$Download_DEBIAN_13" != "Y" ] && continue ;;
-            11) [ "$Download_UBUNTU_2204" != "Y" ] && continue ;;
-            12) [ "$Download_UBUNTU_2404" != "Y" ] && continue ;;
-            13) [ "$Download_UBUNTU_2504" != "Y" ] && continue ;;
-            21) [ "$Download_FEDORA_41" != "Y" ] && continue ;;
-            31) [ "$Download_ROCKY_LINUX_9" != "Y" ] && continue ;;
-        esac
+    for distro_entry in "${DISTRO_METADATA[@]}"; do
+        IFS='|' read -r distro_id distro_name offset <<< "$distro_entry"
         
+        # Check if this distro was selected
+        if [[ ! " $SELECTED_DISTROS " =~ " $distro_id " ]]; then
+            continue
+        fi
+        
+        vmid=$((VMID_BASE + offset))
         echo "  Destroying intermediate VMID $vmid..."
         
         # If remote, execute qm destroy on the remote host

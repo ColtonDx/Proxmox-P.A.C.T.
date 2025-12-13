@@ -7,19 +7,38 @@
 DEFAULT_VMID=800
 DEFAULT_STORAGE="local-lvm"
 
+# Define distro metadata: id|name|vmid_offset|filename|download_url
+# The id field is used for filtering (debian11, ubuntu2404, etc.)
+declare -a DISTROS=(
+    "debian11|Debian-11|1|debian-11-template.qcow2|https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-genericcloud-amd64.qcow2"
+    "debian12|Debian-12|2|debian-12-template.qcow2|https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2"
+    "debian13|Debian-13|3|debian-13-template.qcow2|https://cloud.debian.org/images/cloud/trixie/daily/latest/debian-13-genericcloud-amd64-daily.qcow2"
+    "ubuntu2204|Ubuntu-2204|11|ubuntu-2204-template.img|https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img"
+    "ubuntu2404|Ubuntu-2404|12|ubuntu-2404-template.img|https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img"
+    "ubuntu2504|Ubuntu-2504|13|ubuntu-2504-template.img|https://cloud-images.ubuntu.com/releases/plucky/release/ubuntu-25.04-server-cloudimg-amd64.img"
+    "fedora41|Fedora-41|21|fedora-41-template.qcow2|https://fedora.mirror.constant.com/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2"
+    "rocky9|Rocky-9|31|rocky-9-template.qcow2|http://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud.latest.x86_64.qcow2"
+)
+
+# Map of distro groups to their individual IDs
+declare -A DISTRO_GROUPS=(
+    [debian]="debian11 debian12 debian13"
+    [ubuntu]="ubuntu2204 ubuntu2404 ubuntu2504"
+    [all]="debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 rocky9"
+)
 
 print_usage() {
         cat <<EOF
 Usage: $0 [--vmid=800] [--storage=local-lvm] [--build=LIST] [--rebuild] [--packer-enabled]
 
 Options:
-    --vmid=NUM        Base VMID to use (sets nVMID). Defaults to ${DEFAULT_VMID}.
-    --storage=NAME    Storage pool to use (sets PROXMOX_STORAGE_POOL). Defaults to ${DEFAULT_STORAGE}.
-    --build=LIST      Comma-separated list of images to build. Special values:
-                                         all (default) - build every image
-                                         debian        - debian11,debian12,debian13
-                                         ubuntu        - ubuntu2204,ubuntu2404,ubuntu2504
-                                     Individual names: debian11,debian12,debian13,ubuntu2204,ubuntu2404,ubuntu2504,fedora41,rocky9
+    --vmid=NUM        Base VMID to use. Defaults to ${DEFAULT_VMID}.
+    --storage=NAME    Storage pool to use. Defaults to ${DEFAULT_STORAGE}.
+    --build=LIST      Comma-separated list of distros to build. Special values:
+                        all      - build every distro (default)
+                        debian   - debian11, debian12, debian13
+                        ubuntu   - ubuntu2204, ubuntu2404, ubuntu2504
+                      Individual names: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9
     --rebuild         Delete existing VMs at target VMIDs before building (destructive).
                       Without this flag, existing VMs are preserved.
     --packer-enabled  Packer will be used for customization. Checks both base and packer VMIDs.
@@ -27,11 +46,10 @@ Options:
 EOF
 }
 
-
-# defaults (may be overridden by Options.ini earlier)
+# Defaults (may be overridden by Options.ini earlier)
 VMID="${DEFAULT_VMID}"
-STORAGE="${PROXMOX_STORAGE_POOL:-$DEFAULT_STORAGE}"
-INCLUDE="all"
+STORAGE="${PROXMOX_STORAGE:-$DEFAULT_STORAGE}"
+BUILD_LIST="all"
 REBUILD=false
 PACKER_ENABLED=false
 
@@ -39,7 +57,7 @@ for arg in "$@"; do
     case "$arg" in
         --vmid=*) VMID="${arg#*=}" ;;
         --storage=*) STORAGE="${arg#*=}" ;;
-        --build=*) INCLUDE="${arg#*=}" ;;
+        --build=*) BUILD_LIST="${arg#*=}" ;;
         --rebuild) REBUILD=true ;;
         --packer-enabled) PACKER_ENABLED=true ;;
         --help) print_usage; exit 0 ;;
@@ -47,65 +65,36 @@ for arg in "$@"; do
     esac
 done
 
-# Apply parsed values by overriding the variables used later in the script
-nVMID="${VMID}"
-PROXMOX_STORAGE_POOL="${STORAGE}"
+# Apply parsed values
+VMID_BASE="${VMID}"
+STORAGE_POOL="${STORAGE}"
 
-# Normalize and decide which images to build. Default is all images unless include is set.
-Download_DEBIAN_11="N"
-Download_DEBIAN_12="N"
-Download_DEBIAN_13="N"
-Download_UBUNTU_2204="N"
-Download_UBUNTU_2404="N"
-Download_UBUNTU_2504="N"
-Download_FEDORA_41="N"
-Download_ROCKY_LINUX_9="N"
-
-if [ -z "${INCLUDE}" ] || [ "${INCLUDE}" = "all" ]; then
-    Download_DEBIAN_11="Y"
-    Download_DEBIAN_12="Y"
-    Download_DEBIAN_13="Y"
-    Download_UBUNTU_2204="Y"
-    Download_UBUNTU_2404="Y"
-    Download_UBUNTU_2504="Y"
-    Download_FEDORA_41="Y"
-    Download_ROCKY_LINUX_9="Y"
+# Parse build list and populate selected distros
+SELECTED_DISTROS=""
+if [ -z "${BUILD_LIST}" ] || [ "${BUILD_LIST}" = "all" ]; then
+    SELECTED_DISTROS="${DISTRO_GROUPS[all]}"
 else
-    # support comma or space separated list
-    items="$(echo "$INCLUDE" | tr ',' ' ' )"
-    for it in $items; do
-        case "$it" in
-            debian)
-                Download_DEBIAN_11="Y"; Download_DEBIAN_12="Y"; Download_DEBIAN_13="Y" ;;
-            debian11) Download_DEBIAN_11="Y" ;;
-            debian12) Download_DEBIAN_12="Y" ;;
-            debian13) Download_DEBIAN_13="Y" ;;
-            ubuntu)
-                Download_UBUNTU_2204="Y"; Download_UBUNTU_2404="Y"; Download_UBUNTU_2504="Y" ;;
-            ubuntu2204) Download_UBUNTU_2204="Y" ;;
-            ubuntu2404) Download_UBUNTU_2404="Y" ;;
-            ubuntu2504) Download_UBUNTU_2504="Y" ;;
-            fedora|fedora41) Download_FEDORA_41="Y" ;;
-            rocky|rocky9|rockylinux9) Download_ROCKY_LINUX_9="Y" ;;
-            *) echo "Warning: unknown include item '$it' - ignoring" ;;
-        esac
+    # Support comma or space separated list
+    items="$(echo "$BUILD_LIST" | tr ',' ' ')"
+    for item in $items; do
+        if [ -n "${DISTRO_GROUPS[$item]}" ]; then
+            # It's a group (debian, ubuntu, etc.)
+            SELECTED_DISTROS="${SELECTED_DISTROS} ${DISTRO_GROUPS[$item]}"
+        else
+            # Check if it's a valid individual distro ID
+            if [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 rocky9 " =~ " $item " ]]; then
+                SELECTED_DISTROS="${SELECTED_DISTROS} $item"
+            else
+                echo "Warning: unknown build item '$item' - ignoring" >&2
+            fi
+        fi
     done
 fi
 
-echo "Using nVMID=${nVMID}, storage=${PROXMOX_STORAGE_POOL}, include='${INCLUDE}', rebuild=${REBUILD}, packer-enabled=${PACKER_ENABLED}"
-# --- end CLI parameter handling ---
+# Remove duplicates and normalize spacing
+SELECTED_DISTROS="$(echo "$SELECTED_DISTROS" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)"
 
-# Define distro configurations: name|vmid_offset|filename|download_url|customization_var
-declare -a DISTROS=(
-    "Debian-11|1|debian-11-template.qcow2|https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-genericcloud-amd64.qcow2|Download_DEBIAN_11"
-    "Debian-12|2|debian-12-template.qcow2|https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2|Download_DEBIAN_12"
-    "Debian-13|3|debian-13-template.qcow2|https://cloud.debian.org/images/cloud/trixie/daily/latest/debian-13-genericcloud-amd64-daily.qcow2|Download_DEBIAN_13"
-    "Ubuntu-2204|11|ubuntu-2204-template.img|https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img|Download_UBUNTU_2204"
-    "Ubuntu-2404|12|ubuntu-2404-template.img|https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img|Download_UBUNTU_2404"
-    "Ubuntu-2504|13|ubuntu-2504-template.img|https://cloud-images.ubuntu.com/releases/plucky/release/ubuntu-25.04-server-cloudimg-amd64.img|Download_UBUNTU_2504"
-    "Fedora-41|21|fedora-41-template.qcow2|https://fedora.mirror.constant.com/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2|Download_FEDORA_41"
-    "Rocky-9|31|rocky-9-template.qcow2|http://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud.latest.x86_64.qcow2|Download_ROCKY_LINUX_9"
-)
+echo "Using VMID_BASE=${VMID_BASE}, storage=${STORAGE_POOL}, build='${BUILD_LIST}', selected='${SELECTED_DISTROS}', rebuild=${REBUILD}, packer-enabled=${PACKER_ENABLED}"
 
 # Create and configure a VM template
 create_template() {
@@ -175,16 +164,16 @@ manage_vmid_lifecycle() {
 
 apt-get install libguestfs-tools -y > /dev/null 2>&1
 
-# Process all configured distros
+# Process all selected distros
 for distro_config in "${DISTROS[@]}"; do
-    IFS='|' read -r distro_name offset filename url config_var <<< "$distro_config"
+    IFS='|' read -r distro_id distro_name offset filename url <<< "$distro_config"
     
-    # Check if this distro should be built
-    if [ "${!config_var}" != "Y" ]; then
+    # Check if this distro was selected for building
+    if [[ ! " $SELECTED_DISTROS " =~ " $distro_id " ]]; then
         continue
     fi
     
-    vmid=$((nVMID + offset))
+    vmid=$((VMID_BASE + offset))
     template_name="Template-${distro_name}"
     
     # Handle VMID lifecycle (destroy or validate)
@@ -194,5 +183,5 @@ for distro_config in "${DISTROS[@]}"; do
     
     # Build the template
     echo "Creating base ${distro_name} Template"
-    create_template "$vmid" "$template_name" "$filename" "$url" "$PROXMOX_STORAGE_POOL"
+    create_template "$vmid" "$template_name" "$filename" "$url" "$STORAGE_POOL"
 done
