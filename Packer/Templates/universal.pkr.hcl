@@ -16,7 +16,7 @@
 packer {
   required_plugins {
     proxmox = {
-      version = ">= 1.1.8"
+      version = ">= 1.2.2"
       source  = "github.com/hashicorp/proxmox"
     }
     ansible = {
@@ -170,7 +170,7 @@ source "proxmox-clone" "vm" {
 
 # Build Definition to create the VM Template
 build {
-    name = local.config.build_name
+    name = "Clone VM"
     sources = ["proxmox-clone.vm"]
 
     # Wait for Cloud-Init to finish

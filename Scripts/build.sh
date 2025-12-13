@@ -583,9 +583,9 @@ if [ "$PROXMOX_IS_REMOTE" = true ]; then
         PACKAGES="$PACKAGES sshpass"
     fi
 
-    # Add wget, unzip, git, curl only if running Packer
+    # Add wget, unzip, git, curl, ansible only if running Packer
     if [ "$RUN_PACKER" = true ]; then
-        PACKAGES="$PACKAGES wget unzip git curl"
+        PACKAGES="$PACKAGES wget unzip git curl ansible"
     fi
 
     # Check which packages are already installed
