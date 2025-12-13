@@ -548,7 +548,7 @@ packer_build() {
         -var "proxmox_api_token_id=$PACKER_TOKEN_ID" \
         -var "proxmox_api_token_secret=$PACKER_TOKEN_SECRET" \
         -var "vmid=$vmid" \
-        -var "storage_pool=$PROXMOX_STORAGE" \
+        -var "proxmox_storage=$PROXMOX_STORAGE" \
         -var "distro=$distro_id" \
         -var "ansible_playbook=$ansiblefile" \
         -var "ansible_varfile=$ansiblevarfile" \
