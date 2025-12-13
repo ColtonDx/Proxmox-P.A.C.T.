@@ -134,9 +134,10 @@ Choose which Linux distributions to create templates for. Options include:
 - `all` - Create templates for all supported distros
 - `debian` - All Debian versions (11, 12, 13)
 - `ubuntu` - All Ubuntu versions (22.04, 24.04, 25.04)
-- Individual names: `debian11`, `debian12`, `debian13`, `ubuntu2204`, `ubuntu2404`, `ubuntu2504`, `fedora41`, `rocky9`
+- `fedora` - All Fedora versions (41, 42)
+- Individual names: `debian11`, `debian12`, `debian13`, `ubuntu2204`, `ubuntu2404`, `ubuntu2504`, `fedora41`, `fedora42`, `fedora43`, `rocky9`
 
-Example: `debian12,ubuntu2404` to create only Debian 12 and Ubuntu 24.04 templates
+Example: `debian12,ubuntu2404,fedora43` to create only Debian 12, Ubuntu 24.04, and Fedora 43 templates
 
 #### 2. Do you want to customize the templates with Packer?
 Choose whether to run the Packer customization phase after creating base templates:
@@ -437,6 +438,8 @@ VM template VMIDs follow this numbering scheme (with default nVMID=800):
 | Ubuntu 2404 | 812 |
 | Ubuntu 2504 | 813 |
 | Fedora 41 | 821 |
+| Fedora 42 | 822 |
+| Fedora 43 | 823 |
 | Rocky Linux 9 | 831 |
 
 If using Packer customization, customized VMs get base VMID + 100 (e.g., Debian 12 → 902).
@@ -446,12 +449,13 @@ If using Packer customization, customized VMs get base VMID + 100 (e.g., Debian 
 - Debian 11
 - Debian 12
 - Debian 13
-- Ubuntu 2204
-- Ubuntu 2404
-- Ubuntu 2504
+- Ubuntu 22.04
+- Ubuntu 24.04
+- Ubuntu 25.04
 - Fedora 41
+- Fedora 42
+- Fedora 43
 - Rocky Linux 9
-- CentOS 9
 
 ## Links
 

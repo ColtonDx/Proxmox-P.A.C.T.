@@ -111,6 +111,8 @@ declare -a DISTRO_METADATA=(
     "ubuntu2404|Ubuntu-24.04|12"
     "ubuntu2504|Ubuntu-25.04|13"
     "fedora41|Fedora-41|21"
+    "fedora42|Fedora-42|22"
+    "fedora43|Fedora-43|23"
     "rocky9|Rocky-9|31"
 )
 
@@ -118,7 +120,8 @@ declare -a DISTRO_METADATA=(
 declare -A DISTRO_GROUPS=(
     [debian]="debian11 debian12 debian13"
     [ubuntu]="ubuntu2204 ubuntu2404 ubuntu2504"
-    [all]="debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 rocky9"
+    [fedora]="fedora41 fedora42 fedora43"
+    [all]="debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43 rocky9"
 )
 
 # Selected distros to build (space-separated list of distro IDs)
@@ -153,7 +156,7 @@ Notes:
   - --ansible uses Ansible playbooks instead of proxmox.sh (SSH will be skipped).
   - Without --local, defaults to SSH mode (remote Proxmox).
   - Without --rebuild, existing VMs at target VMIDs are preserved (safer).
-  - --templates accepts: all, debian, ubuntu, individual names (debian11, debian12, etc.)
+  - --templates accepts: all, debian, ubuntu, fedora, individual names (debian11, debian12, ubuntu2204, fedora43, etc.)
   - --custom-packerfile allows using a custom Packer template with --packer.
 EOF
 }
@@ -276,14 +279,14 @@ if [ -n "$BUILD_LIST" ]; then
         items="$(echo "$BUILD_LIST" | tr ',' ' ')"
         for item in $items; do
             if [ -n "${DISTRO_GROUPS[$item]}" ]; then
-                # It's a group (debian, ubuntu, etc.)
+                # It's a group (debian, ubuntu, fedora, etc.)
                 SELECTED_DISTROS="${SELECTED_DISTROS} ${DISTRO_GROUPS[$item]}"
-            elif [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 rocky9 " =~ " $item " ]]; then
+            elif [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43 rocky9 " =~ " $item " ]]; then
                 # It's a valid individual distro
                 SELECTED_DISTROS="${SELECTED_DISTROS} $item"
-            else
-                echo "Error: Unknown template '$item'" >&2
-                echo "Valid options: all, debian, ubuntu, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9" >&2
+                else
+                    echo "Error: Unknown template '$item'" >&2
+                    echo "Valid options: all, debian, ubuntu, fedora, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43, rocky9" >&2
                 exit 1
             fi
         done
@@ -301,7 +304,7 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     
     # Q1: Ask which images to build
     echo "Select distros to create templates from:"
-    echo "  Available: all, debian, ubuntu, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9"
+    echo "  Available: all, debian, ubuntu, fedora, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43, rocky9"
     
     # Keep asking until valid input is provided
     BUILD_VALID=false
@@ -326,7 +329,7 @@ if [ "$INTERACTIVE_MODE" = true ]; then
                 if [ -n "${DISTRO_GROUPS[$it]}" ]; then
                     # It's a group
                     SELECTED_DISTROS="${SELECTED_DISTROS} ${DISTRO_GROUPS[$it]}"
-                elif [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 rocky9 " =~ " $it " ]]; then
+                elif [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43 rocky9 " =~ " $it " ]]; then
                     # Valid individual distro
                     SELECTED_DISTROS="${SELECTED_DISTROS} $it"
                 else
@@ -336,7 +339,7 @@ if [ "$INTERACTIVE_MODE" = true ]; then
             
             if [ -n "$INVALID_ITEMS" ]; then
                 echo "Error: Unknown distro(s):$INVALID_ITEMS"
-                echo "Valid options: all, debian, ubuntu, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9"
+                echo "Valid options: all, debian, ubuntu, fedora, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43, rocky9"
             else
                 # Remove duplicates
                 SELECTED_DISTROS="$(echo "$SELECTED_DISTROS" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)"
