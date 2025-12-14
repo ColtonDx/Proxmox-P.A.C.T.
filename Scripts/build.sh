@@ -17,9 +17,9 @@
 #
 # Optional Packer customization:
 #  * --packer: Enable Packer customization phase with API tokens
-#  * --custom-packerfile: Use custom Packer template instead of default
-#  * --custom-ansible: Use custom Ansible playbook for Packer customization
-#  * --custom-ansible-varfile: Use custom variables file for Ansible playbook
+#  * --custom-packerfile: Use custom Packer template (local path or URL)
+#  * --custom-ansible: Use custom Ansible playbook (local path or URL)
+#  * --custom-ansible-varfile: Use custom variables file (local path or URL)
 #
 # Smart dependency management:
 #  * Installs only required packages based on selected options
@@ -144,9 +144,9 @@ Options:
   --local                    Run directly on Proxmox host (no SSH needed).
   --templates=LIST           Comma-separated list of templates to build (e.g., debian12,ubuntu2404).
   --answerfile=PATH          Path to custom answerfile (.env.local used by default if exists).
-  --custom-packerfile=PATH   Path to custom Packer template file instead of default.
-  --custom-ansible=PATH      Path to custom Ansible playbook for template customization.
-  --custom-ansible-varfile=PATH  Path to custom variables file for Ansible playbook (default: ./Ansible/Variables/vars.yml).
+  --custom-packerfile=PATH   Path or URL to custom Packer template file instead of default.
+  --custom-ansible=PATH      Path or URL to custom Ansible playbook for template customization.
+  --custom-ansible-varfile=PATH  Path or URL to custom variables file for Ansible playbook (default: ./Ansible/Variables/vars.yml).
   --packer-token-id=TOKEN    Proxmox API Token ID for Packer (required with --packer).
   --packer-token-secret=SEC  Proxmox API Token Secret for Packer (required with --packer).
   --help                     Show this help and exit
@@ -512,6 +512,50 @@ echo ""
 ###################FUNCTIONS
 #####################################################################################
 
+#####################################################################################
+################### HELPER FUNCTION FOR URL/PATH RESOLUTION
+#####################################################################################
+
+# Function to resolve a file reference that can be either a URL or a local path
+# If it's a URL (starts with http/https), downloads it to a temp file
+# If it's a local path, validates it exists
+# Returns the resolved path (either temp downloaded file or local path)
+resolve_file_reference() {
+    local ref="$1"
+    local name="$2"  # For error messages
+    
+    if [[ "$ref" =~ ^https?:// ]]; then
+        # It's a URL - download it to a temp file
+        local temp_file="/tmp/pact_${name}_$$.tmp"
+        echo "Downloading $name from URL: $ref" >&2
+        
+        if command -v curl &> /dev/null; then
+            curl -fsSL -o "$temp_file" "$ref"
+        elif command -v wget &> /dev/null; then
+            wget -q -O "$temp_file" "$ref"
+        else
+            echo "Error: Neither curl nor wget found to download $name from URL" >&2
+            return 1
+        fi
+        
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to download $name from $ref" >&2
+            return 1
+        fi
+        
+        # Trap to clean up temp file on exit
+        trap "rm -f $temp_file" EXIT
+        echo "$temp_file"
+    else
+        # It's a local path - validate it exists
+        if [ ! -f "$ref" ]; then
+            echo "Error: $name not found at path: $ref" >&2
+            return 1
+        fi
+        echo "$ref"
+    fi
+}
+
 #Function to customize selected distros with Packer.
 start_packer() {
     # Iterate through selected distros
@@ -537,9 +581,21 @@ packer_build() {
     local ansiblefile="${CUSTOM_ANSIBLE_PLAYBOOK:-./Ansible/Playbooks/image_customizations.yml}"
     local ansiblevarfile="${CUSTOM_ANSIBLE_VARFILE:-./Ansible/Variables/vars.yml}"
     
-    # Check if packerfile exists
-    if [ ! -f "$packerfile" ]; then
-        echo "Error: Packer template not found: $packerfile" >&2
+    # Resolve packerfile (handle URLs and paths)
+    packerfile=$(resolve_file_reference "$packerfile" "Packer template")
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    
+    # Resolve ansiblefile (handle URLs and paths)
+    ansiblefile=$(resolve_file_reference "$ansiblefile" "Ansible playbook")
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    
+    # Resolve ansiblevarfile (handle URLs and paths)
+    ansiblevarfile=$(resolve_file_reference "$ansiblevarfile" "Ansible variables file")
+    if [ $? -ne 0 ]; then
         return 1
     fi
     
