@@ -43,10 +43,10 @@ variable "proxmox_api_token_secret" {
     description = "Proxmox API token secret"
 }
 
-variable "proxmox_host_node" {
+variable "proxmox_target_node" {
     type = string
     sensitive = true
-    description = "Proxmox host node name"
+    description = "Proxmox target node name"
 }
 
 variable "proxmox_storage" {
@@ -140,7 +140,7 @@ source "proxmox-clone" "vm" {
     insecure_skip_tls_verify = true
 
     # VM General Settings
-    node = "${var.proxmox_host_node}"
+    node = "${var.proxmox_target_node}"
     vm_id = "${var.vmid}"
     vm_name = local.config.vm_name
     template_description = "An Image Customized by Packer. Distribution: ${var.distro}. Build Date: ${local.build_time}"

@@ -98,7 +98,7 @@ EOF
 # Defaults (may be overridden by Options.ini earlier)
 VMID_BASE="${DEFAULT_VMID_BASE}"
 PROXMOX_STORAGE="${PROXMOX_STORAGE:-$DEFAULT_PROXMOX_STORAGE}"
-BUILD_LIST="all"
+DISTRO_BUILD_SELECTION="all"
 REBUILD=false
 RUN_PACKER=false
 
@@ -108,7 +108,7 @@ for arg in "$@"; do
         --vmid=*) VMID_BASE="${arg#*=}" ;;
         --proxmox-storage=*) PROXMOX_STORAGE="${arg#*=}" ;;
         --storage=*) PROXMOX_STORAGE="${arg#*=}" ;;
-        --build=*) BUILD_LIST="${arg#*=}" ;;
+        --build=*) DISTRO_BUILD_SELECTION="${arg#*=}" ;;
         --rebuild) REBUILD=true ;;
         --run-packer) RUN_PACKER=true ;;
         --packer-enabled) RUN_PACKER=true ;;
@@ -119,11 +119,11 @@ done
 
 # Parse build list and populate selected distros
 SELECTED_DISTROS=""
-if [ -z "${BUILD_LIST}" ] || [ "${BUILD_LIST}" = "all" ]; then
+if [ -z "${DISTRO_BUILD_SELECTION}" ] || [ "${DISTRO_BUILD_SELECTION}" = "all" ]; then
     SELECTED_DISTROS="${DISTRO_GROUPS[all]}"
 else
     # Support comma or space separated list
-    items="$(echo "$BUILD_LIST" | tr ',' ' ')"
+    items="$(echo "$DISTRO_BUILD_SELECTION" | tr ',' ' ')"
     for item in $items; do
         if [ -n "${DISTRO_GROUPS[$item]}" ]; then
             # It's a group (debian, ubuntu, etc.)
@@ -142,7 +142,7 @@ fi
 # Remove duplicates and normalize spacing
 SELECTED_DISTROS="$(echo "$SELECTED_DISTROS" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)"
 
-echo "Using VMID_BASE=${VMID_BASE}, storage=${PROXMOX_STORAGE}, build='${BUILD_LIST}', selected='${SELECTED_DISTROS}', rebuild=${REBUILD}, run-packer=${RUN_PACKER}"
+echo "Using VMID_BASE=${VMID_BASE}, storage=${PROXMOX_STORAGE}, build='${DISTRO_BUILD_SELECTION}', selected='${SELECTED_DISTROS}', rebuild=${REBUILD}, run-packer=${RUN_PACKER}"
 
 # Create and configure a VM template
 create_template() {
