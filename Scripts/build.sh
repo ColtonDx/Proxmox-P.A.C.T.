@@ -17,9 +17,9 @@
 #
 # Optional Packer customization:
 #  * --packer: Enable Packer customization phase with API tokens
-#  * --custom-packerfile: Use custom Packer template instead of default
-#  * --custom-ansible: Use custom Ansible playbook for Packer customization
-#  * --custom-ansible-varfile: Use custom variables file for Ansible playbook
+#  * --custom-packerfile: Use custom Packer template (local path or URL)
+#  * --custom-ansible: Use custom Ansible playbook (local path or URL)
+#  * --custom-ansible-varfile: Use custom variables file (local path or URL)
 #
 # Smart dependency management:
 #  * Installs only required packages based on selected options
@@ -61,14 +61,14 @@
 #   SSH_PRIVATE_KEY_PATH           SSH key path (overridden by CLI args)
 #   PROXMOX_STORAGE                Storage pool name (overridden by CLI args)
 #   VMID_BASE                      Base VMID for templates (overridden by CLI args)
-#   BUILD_LIST                     Distros to build, comma-separated (overridden by CLI args)
+#   DISTRO_BUILD_SELECTION          Distros to build, comma-separated (overridden by CLI args)
 #   PROXMOX_IS_REMOTE              Use SSH to Proxmox (true/false, default: true)
 #   USE_ANSIBLE                    Use Ansible instead of proxmox.sh (true/false, default: false)
 #   RUN_PACKER                     Enable Packer customization (true/false, default: false)
 #   REBUILD                        Delete existing VMs before building (true/false, default: false)
 #   PACKER_TOKEN_ID                Proxmox API Token ID (required if RUN_PACKER=true)
 #   PACKER_TOKEN_SECRET            Proxmox API Token Secret (required if RUN_PACKER=true)
-#   PACKER_HOST_NODE               Proxmox host node for Packer (default: pve)
+#   PROXMOX_TARGET_NODE             Proxmox target node for Packer (default: pve)
 #   CUSTOM_PACKERFILE              Custom Packer template path (optional)
 #   CUSTOM_ANSIBLE_PLAYBOOK        Custom Ansible playbook for Packer (optional)
 #   CUSTOM_ANSIBLE_VARFILE         Custom Ansible variables file for Packer (optional)
@@ -86,7 +86,7 @@ WORK_DIR_NAME="pact_build_$(date +%s)_${RANDOM}"
 ################### CLI OPTION PARSING
 #####################################################################################
 
-# Default flags and values (set BEFORE sourcing answerfile so answerfile can override)
+# Default flags and values (set BEFORE sourcing config file so config file can override)
 USE_ANSIBLE=false
 RUN_PACKER=false
 REBUILD=false
@@ -96,10 +96,10 @@ PROXMOX_IS_REMOTE=true
 CUSTOM_PACKERFILE=""
 CUSTOM_ANSIBLE_PLAYBOOK=""
 CUSTOM_ANSIBLE_VARFILE=""
-BUILD_LIST=""
+DISTRO_BUILD_SELECTION=""
 PACKER_TOKEN_ID=""
 PACKER_TOKEN_SECRET=""
-ANSWERFILE=""
+CONFIG_FILE_PATH=""
 
 # Define distro metadata: id|name|vmid_offset
 # Maps distro names to their identifiers for easy grouping
@@ -144,9 +144,9 @@ Options:
   --local                    Run directly on Proxmox host (no SSH needed).
   --templates=LIST           Comma-separated list of templates to build (e.g., debian12,ubuntu2404).
   --answerfile=PATH          Path to custom answerfile (.env.local used by default if exists).
-  --custom-packerfile=PATH   Path to custom Packer template file instead of default.
-  --custom-ansible=PATH      Path to custom Ansible playbook for template customization.
-  --custom-ansible-varfile=PATH  Path to custom variables file for Ansible playbook (default: ./Ansible/Variables/vars.yml).
+  --custom-packerfile=PATH   Path or URL to custom Packer template file instead of default.
+  --custom-ansible=PATH      Path or URL to custom Ansible playbook for template customization.
+  --custom-ansible-varfile=PATH  Path or URL to custom variables file for Ansible playbook (default: ./Ansible/Variables/vars.yml).
   --packer-token-id=TOKEN    Proxmox API Token ID for Packer (required with --packer).
   --packer-token-secret=SEC  Proxmox API Token Secret for Packer (required with --packer).
   --help                     Show this help and exit
@@ -195,10 +195,10 @@ for arg in "$@"; do
             PROXMOX_IS_REMOTE=false
             ;;
         --templates=*)
-            BUILD_LIST="${arg#*=}"
+            DISTRO_BUILD_SELECTION="${arg#*=}"
             ;;
         --answerfile=*)
-            ANSWERFILE="${arg#*=}"
+            CONFIG_FILE_PATH="${arg#*=}"
             ;;
         --custom-packerfile=*)
             CUSTOM_PACKERFILE="${arg#*=}"
@@ -227,15 +227,15 @@ for arg in "$@"; do
     esac
 done
 
-# Source answerfile if it exists (.env.local by default, or custom path via --answerfile)
+# Source config file if it exists (.env.local by default, or custom path via --answerfile)
 # This allows users to pre-configure variables instead of using CLI args or interactive mode
-# Answerfile values are loaded here and can be overridden by CLI arguments passed above
-ANSWERFILE_PATH="${ANSWERFILE:-.env.local}"
+# Config file values are loaded here and can be overridden by CLI arguments passed above
+CONFIG_FILE_EXPANDED="${CONFIG_FILE_PATH:-.env.local}"
 # Expand tilde in path
-ANSWERFILE_PATH="${ANSWERFILE_PATH/#\~/$HOME}"
-if [ -f "$ANSWERFILE_PATH" ]; then
-    echo "Loading configuration from $ANSWERFILE_PATH..."
-    source "$ANSWERFILE_PATH"
+CONFIG_FILE_EXPANDED="${CONFIG_FILE_EXPANDED/#\~/$HOME}"
+if [ -f "$CONFIG_FILE_EXPANDED" ]; then
+    echo "Loading configuration from $CONFIG_FILE_EXPANDED..."
+    source "$CONFIG_FILE_EXPANDED"
 fi
 
 # Validate that --interactive is not mixed with other arguments
@@ -269,14 +269,14 @@ fi
 : "${PROXMOX_STORAGE:=local-lvm}"
 : "${VMID_BASE:=800}"
 
-# Parse BUILD_LIST and populate SELECTED_DISTROS
-# BUILD_LIST can be set via: --templates=, answerfile, or interactive mode
-if [ -n "$BUILD_LIST" ]; then
-    if [ "$BUILD_LIST" = "all" ]; then
+# Parse DISTRO_BUILD_SELECTION and populate SELECTED_DISTROS
+# DISTRO_BUILD_SELECTION can be set via: --templates=, config file, or interactive mode
+if [ -n "$DISTRO_BUILD_SELECTION" ]; then
+    if [ "$DISTRO_BUILD_SELECTION" = "all" ]; then
         SELECTED_DISTROS="${DISTRO_GROUPS[all]}"
     else
         # Parse comma or space separated list
-        items="$(echo "$BUILD_LIST" | tr ',' ' ')"
+        items="$(echo "$DISTRO_BUILD_SELECTION" | tr ',' ' ')"
         for item in $items; do
             if [ -n "${DISTRO_GROUPS[$item]}" ]; then
                 # It's a group (debian, ubuntu, fedora, etc.)
@@ -311,19 +311,19 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     while [ "$BUILD_VALID" = false ]; do
         read -p "Enter comma-separated list (or 'all' for all distros) [Default: all]: " -r build_input
         if [ -z "$build_input" ]; then
-            BUILD_INPUT="all"
+            DISTRO_BUILD_SELECTION="all"
         else
-            BUILD_INPUT="$build_input"
+            DISTRO_BUILD_SELECTION="$build_input"
         fi
         
         # Parse the input
         SELECTED_DISTROS=""
-        if [ "$BUILD_INPUT" = "all" ]; then
+        if [ "$DISTRO_BUILD_SELECTION" = "all" ]; then
             SELECTED_DISTROS="${DISTRO_GROUPS[all]}"
             BUILD_VALID=true
         else
             # Parse comma-separated list
-            items="$(echo "$BUILD_INPUT" | tr ',' ' ')"
+            items="$(echo "$DISTRO_BUILD_SELECTION" | tr ',' ' ')"
             INVALID_ITEMS=""
             for it in $items; do
                 if [ -n "${DISTRO_GROUPS[$it]}" ]; then
@@ -472,9 +472,9 @@ if [ "$INTERACTIVE_MODE" = true ]; then
             fi
         done
         
-        read -p "Proxmox Host Node (press Enter for default 'pve'): " -r proxmox_host_node_input
-        if [ -n "$proxmox_host_node_input" ]; then
-            PROXMOX_HOST_NODE="$proxmox_host_node_input"
+        read -p "Proxmox Target Node (press Enter for default 'pve'): " -r proxmox_target_node_input
+        if [ -n "$proxmox_target_node_input" ]; then
+            PROXMOX_TARGET_NODE="$proxmox_target_node_input"
         fi
     fi
     
@@ -492,7 +492,7 @@ fi
 # Validate that at least one distro is selected
 if [ -z "$SELECTED_DISTROS" ]; then
     echo "Error: At least one distro must be selected" >&2
-    echo "Use --interactive mode for guidance or set BUILD_LIST via CLI/answerfile" >&2
+    echo "Use --interactive mode for guidance or set DISTRO_BUILD_SELECTION via CLI/config file" >&2
     exit 1
 fi
 
@@ -511,6 +511,50 @@ echo ""
 #####################################################################################
 ###################FUNCTIONS
 #####################################################################################
+
+#####################################################################################
+################### HELPER FUNCTION FOR URL/PATH RESOLUTION
+#####################################################################################
+
+# Function to resolve a file reference that can be either a URL or a local path
+# If it's a URL (starts with http/https), downloads it to a temp file
+# If it's a local path, validates it exists
+# Returns the resolved path (either temp downloaded file or local path)
+resolve_file_reference() {
+    local ref="$1"
+    local name="$2"  # For error messages
+    
+    if [[ "$ref" =~ ^https?:// ]]; then
+        # It's a URL - download it to a temp file
+        local temp_file="/tmp/pact_${name}_$$.tmp"
+        echo "Downloading $name from URL: $ref" >&2
+        
+        if command -v curl &> /dev/null; then
+            curl -fsSL -o "$temp_file" "$ref"
+        elif command -v wget &> /dev/null; then
+            wget -q -O "$temp_file" "$ref"
+        else
+            echo "Error: Neither curl nor wget found to download $name from URL" >&2
+            return 1
+        fi
+        
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to download $name from $ref" >&2
+            return 1
+        fi
+        
+        # Trap to clean up temp file on exit
+        trap "rm -f $temp_file" EXIT
+        echo "$temp_file"
+    else
+        # It's a local path - validate it exists
+        if [ ! -f "$ref" ]; then
+            echo "Error: $name not found at path: $ref" >&2
+            return 1
+        fi
+        echo "$ref"
+    fi
+}
 
 #Function to customize selected distros with Packer.
 start_packer() {
@@ -537,9 +581,21 @@ packer_build() {
     local ansiblefile="${CUSTOM_ANSIBLE_PLAYBOOK:-./Ansible/Playbooks/image_customizations.yml}"
     local ansiblevarfile="${CUSTOM_ANSIBLE_VARFILE:-./Ansible/Variables/vars.yml}"
     
-    # Check if packerfile exists
-    if [ ! -f "$packerfile" ]; then
-        echo "Error: Packer template not found: $packerfile" >&2
+    # Resolve packerfile (handle URLs and paths)
+    packerfile=$(resolve_file_reference "$packerfile" "Packer template")
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    
+    # Resolve ansiblefile (handle URLs and paths)
+    ansiblefile=$(resolve_file_reference "$ansiblefile" "Ansible playbook")
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    
+    # Resolve ansiblevarfile (handle URLs and paths)
+    ansiblevarfile=$(resolve_file_reference "$ansiblevarfile" "Ansible variables file")
+    if [ $? -ne 0 ]; then
         return 1
     fi
     
@@ -550,7 +606,7 @@ packer_build() {
     fi
     
     packer build \
-        -var "proxmox_host_node=$PROXMOX_HOST_NODE" \
+        -var "proxmox_host_node=$PROXMOX_TARGET_NODE" \
         -var "proxmox_api_url=https://${PROXMOX_HOST}:8006/api2/json" \
         -var "proxmox_api_token_id=$PACKER_TOKEN_ID" \
         -var "proxmox_api_token_secret=$PACKER_TOKEN_SECRET" \
@@ -716,8 +772,8 @@ if [ "$PROXMOX_IS_REMOTE" = true ]; then
     fi
     
     # Add build list to arguments
-    if [ -n "$BUILD_LIST" ]; then
-        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --build=$BUILD_LIST"
+    if [ -n "$DISTRO_BUILD_SELECTION" ]; then
+        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --build=$DISTRO_BUILD_SELECTION"
     fi
     
     # Determine if using key-based authentication
@@ -771,8 +827,8 @@ else
     fi
     
     # Add build list to arguments
-    if [ -n "$BUILD_LIST" ]; then
-        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --build=$BUILD_LIST"
+    if [ -n "$DISTRO_BUILD_SELECTION" ]; then
+        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --build=$DISTRO_BUILD_SELECTION"
     fi
     
     # Create unique local working directory and run

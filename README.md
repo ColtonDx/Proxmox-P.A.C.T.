@@ -204,8 +204,9 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
 - `--storage=POOL` - Proxmox storage pool name (default: local-lvm)
 - `--local` - Run directly on Proxmox host (no SSH needed)
 - `--templates=LIST` - Comma-separated list of templates to build (e.g., debian12,ubuntu2404, all, debian, ubuntu)
-- `--custom-packerfile=PATH` - Path to custom Packer template file (used with --packer)
-- `--custom-ansible=PATH` - Path to custom Ansible playbook for template customization (default: ./Ansible/Playbooks/image_customizations.yml)
+- `--custom-packerfile=PATH_OR_URL` - Path or URL to custom Packer template file (used with --packer)
+- `--custom-ansible=PATH_OR_URL` - Path or URL to custom Ansible playbook for template customization (default: ./Ansible/Playbooks/image_customizations.yml)
+- `--custom-ansible-varfile=PATH_OR_URL` - Path or URL to custom Ansible variables file (default: ./Ansible/Variables/vars.yml)
 - `--packer-token-id=TOKEN` - Proxmox API Token ID for Packer (required with --packer, or prompted in interactive mode)
 - `--packer-token-secret=SECRET` - Proxmox API Token Secret for Packer (required with --packer, or prompted in interactive mode)
 
@@ -253,7 +254,7 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
   --ansible \
   --packer
 
-# With custom Packer template
+# With custom Packer template (local path)
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
   --proxmox-user=root \
@@ -261,13 +262,22 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
   --packer \
   --custom-packerfile=/path/to/custom.pkr.hcl
 
-# With custom Ansible playbook
+# With custom Packer template (URL)
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
   --proxmox-user=root \
   --proxmox-password="password" \
   --packer \
-  --custom-ansible=/path/to/custom_playbook.yml
+  --custom-packerfile=https://example.com/custom.pkr.hcl
+
+# With custom Ansible playbook (local path or URL)
+./Scripts/build.sh \
+  --proxmox-host=pve.local \
+  --proxmox-user=root \
+  --proxmox-password="password" \
+  --packer \
+  --custom-ansible=/path/to/custom_playbook.yml \
+  --custom-ansible-varfile=https://example.com/vars.yml
 
 # With Packer API tokens provided via CLI (fully automated, no interactive prompts)
 ./Scripts/build.sh \

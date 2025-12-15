@@ -27,7 +27,7 @@
           - nano
         state: latest
 
-# Some other examples of what you could do with ansible and this image:
+# Some other examples of what you could do with ansible to customize your templates:
 #
 #  - name: Make sure we have a 'wheel' group
 #    group:
