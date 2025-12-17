@@ -17,7 +17,7 @@
 #   --build=LIST                Comma-separated list of distros to create
 #                               Options: all, debian, ubuntu, or individual names
 #                               Example: debian12,ubuntu2404,fedora41
-#   --rebuild                   Delete existing VMs before building (destructive)
+#   --rebuild-templates            Delete existing VMs before building (destructive)
 #   --run-packer                Packer will customize templates after creation
 #                               Also accepts: --packer-enabled (for backward compatibility)
 #   --help                      Display help message
@@ -44,7 +44,7 @@
 #   ./proxmox.sh --vmid-base=800 --proxmox-storage=local-lvm --build=all --run-packer
 #
 #   # Rebuild existing templates (delete and recreate)
-#   ./proxmox.sh --vmid-base=800 --proxmox-storage=local-lvm --build=debian --rebuild
+#   ./proxmox.sh --vmid-base=800 --proxmox-storage=local-lvm --build=debian --rebuild-templates
 #
 ################################################################################
 
@@ -78,7 +78,7 @@ declare -A DISTRO_GROUPS=(
 
 print_usage() {
         cat <<EOF
-Usage: $0 [--vmid-base=800] [--proxmox-storage=local-lvm] [--build=LIST] [--rebuild] [--run-packer]
+Usage: $0 [--vmid-base=800] [--proxmox-storage=local-lvm] [--build=LIST] [--rebuild-templates] [--run-packer]
 
 Options:
     --vmid-base=NUM        Base VMID to use. Defaults to ${DEFAULT_VMID_BASE}.
@@ -88,7 +88,7 @@ Options:
                         debian   - debian11, debian12, debian13
                         ubuntu   - ubuntu2204, ubuntu2404, ubuntu2504
                       Individual names: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43, rocky9
-    --rebuild         Delete existing VMs at target VMIDs before building (destructive).
+    --rebuild-templates     Delete existing VMs at target VMIDs before building (destructive).
                       Without this flag, existing VMs are preserved.
     --run-packer      Packer will be used for customization. Checks both base and packer VMIDs.
     --help            Show this help and exit
@@ -99,7 +99,7 @@ EOF
 VMID_BASE="${DEFAULT_VMID_BASE}"
 PROXMOX_STORAGE="${PROXMOX_STORAGE:-$DEFAULT_PROXMOX_STORAGE}"
 DISTRO_BUILD_SELECTION="all"
-REBUILD=false
+REBUILD_TEMPLATES=false
 RUN_PACKER=false
 
 for arg in "$@"; do
@@ -109,7 +109,7 @@ for arg in "$@"; do
         --proxmox-storage=*) PROXMOX_STORAGE="${arg#*=}" ;;
         --storage=*) PROXMOX_STORAGE="${arg#*=}" ;;
         --build=*) DISTRO_BUILD_SELECTION="${arg#*=}" ;;
-        --rebuild) REBUILD=true ;;
+        --rebuild-templates) REBUILD_TEMPLATES=true ;;
         --run-packer) RUN_PACKER=true ;;
         --packer-enabled) RUN_PACKER=true ;;
         --help) print_usage; exit 0 ;;
@@ -142,7 +142,7 @@ fi
 # Remove duplicates and normalize spacing
 SELECTED_DISTROS="$(echo "$SELECTED_DISTROS" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)"
 
-echo "Using VMID_BASE=${VMID_BASE}, storage=${PROXMOX_STORAGE}, build='${DISTRO_BUILD_SELECTION}', selected='${SELECTED_DISTROS}', rebuild=${REBUILD}, run-packer=${RUN_PACKER}"
+echo "Using VMID_BASE=${VMID_BASE}, storage=${PROXMOX_STORAGE}, build='${DISTRO_BUILD_SELECTION}', selected='${SELECTED_DISTROS}', rebuild-templates=${REBUILD_TEMPLATES}, run-packer=${RUN_PACKER}"
 
 # Create and configure a VM template
 create_template() {
@@ -187,7 +187,7 @@ manage_vmid_lifecycle() {
     local vmid="$1"
     local offset="$2"
     
-    if [ "$REBUILD" = true ]; then
+    if [ "$REBUILD_TEMPLATES" = true ]; then
         qm destroy "$vmid" 2>/dev/null
         # Only destroy packer VMID if packer is enabled
         if [ "$RUN_PACKER" = true ]; then
@@ -196,13 +196,13 @@ manage_vmid_lifecycle() {
     else
         # Check base VMID
         if check_vmid_exists "$vmid"; then
-            echo "Error: VMID $vmid is already in use. Use --rebuild to replace it, or choose a different VMID_BASE." >&2
+            echo "Error: VMID $vmid is already in use. Use --rebuild-templates to replace it, or choose a different VMID_BASE." >&2
             return 1
         fi
         # Check packer VMID only if packer is enabled
         if [ "$RUN_PACKER" = true ]; then
             if check_vmid_exists "$((vmid + 100))"; then
-                echo "Error: Packer VMID $((vmid + 100)) is already in use. Use --rebuild to replace it, or choose a different VMID_BASE." >&2
+                echo "Error: Packer VMID $((vmid + 100)) is already in use. Use --rebuild-templates to replace it, or choose a different VMID_BASE." >&2
                 return 1
             fi
         fi

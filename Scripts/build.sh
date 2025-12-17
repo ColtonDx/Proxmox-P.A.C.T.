@@ -30,11 +30,11 @@
 #   ./build.sh --interactive       Prompts for all settings interactively
 #   ./build.sh [CLI arguments]     Use command-line arguments directly
 #   ./build.sh                     Load from .env.local (if exists), then prompts missing values
-#   ./build.sh --answerfile=FILE   Load from custom answerfile, then prompts missing values
+#   ./build.sh --answerfile-path=FILE   Load from custom answerfile, then prompts missing values
 #
 # CLI argument options:
-#   --packer                       Enable Packer customization phase
-#   --rebuild                      Delete existing VMs before rebuilding (destructive)
+#   --run-packer                       Enable Packer customization phase
+#   --rebuild-templates                   Delete existing VMs before rebuilding (destructive)
 #   --local                        Run directly on Proxmox host (no SSH needed)
 #   --proxmox-host=HOSTNAME        Proxmox hostname or IP address
 #   --proxmox-user=USERNAME        SSH username for Proxmox (default: root)
@@ -43,7 +43,7 @@
 #   --proxmox-storage=POOL         Proxmox storage pool name (default: local-lvm)
 #   --templates=LIST               Comma-separated list of distros to build (e.g., debian12,ubuntu2404)
 #                                  Also accepts: all, debian, ubuntu
-#   --answerfile=PATH              Path to custom answerfile (.env.local used by default if exists)
+#   --answerfile-path=PATH              Path to custom answerfile (.env.local used by default if exists)
 #   --custom-packerfile=PATH       Path to custom Packer template file
 #   --custom-ansible=PATH          Path to custom Ansible playbook for Packer
 #   --custom-ansible-varfile=PATH  Path to custom variables file for Ansible in Packer
@@ -62,7 +62,7 @@
 #   DISTRO_BUILD_SELECTION          Distros to build, comma-separated (overridden by CLI args)
 #   PROXMOX_IS_REMOTE              Use SSH to Proxmox (true/false, default: true)
 #   RUN_PACKER                     Enable Packer customization (true/false, default: false)
-#   REBUILD                        Delete existing VMs before building (true/false, default: false)
+#   REBUILD_TEMPLATES                     Delete existing VMs before building (true/false, default: false)
 #   PACKER_TOKEN_ID                Proxmox API Token ID (required if RUN_PACKER=true)
 #   PACKER_TOKEN_SECRET            Proxmox API Token Secret (required if RUN_PACKER=true)
 #   PROXMOX_TARGET_NODE             Proxmox target node for Packer (default: pve)
@@ -85,7 +85,7 @@ WORK_DIR_NAME="pact_build_$(date +%s)_${RANDOM}"
 
 # Default flags and values (set BEFORE sourcing config file so config file can override)
 RUN_PACKER=false
-REBUILD=false
+REBUILD_TEMPLATES=false
 INTERACTIVE_MODE=false
 SSH_PRIVATE_KEY_PATH=""
 PROXMOX_IS_REMOTE=true
@@ -95,7 +95,7 @@ CUSTOM_ANSIBLE_VARFILE=""
 DISTRO_BUILD_SELECTION=""
 PACKER_TOKEN_ID=""
 PACKER_TOKEN_SECRET=""
-CONFIG_FILE_PATH=""
+ANSWERFILE_PATH=""
 
 #####################################################################################
 # LOAD ENVIRONMENT VARIABLES (PACT_ PREFIX)
@@ -103,7 +103,7 @@ CONFIG_FILE_PATH=""
 # Check for environment variables with PACT_ prefix and override defaults if set
 # Priority: Environment Variables (PACT_*) > Script Defaults
 [ -n "${PACT_RUN_PACKER:-}" ] && RUN_PACKER="${PACT_RUN_PACKER}"
-[ -n "${PACT_REBUILD:-}" ] && REBUILD="${PACT_REBUILD}"
+[ -n "${PACT_REBUILD_TEMPLATES:-}" ] && REBUILD_TEMPLATES="${PACT_REBUILD_TEMPLATES}"
 [ -n "${PACT_INTERACTIVE_MODE:-}" ] && INTERACTIVE_MODE="${PACT_INTERACTIVE_MODE}"
 [ -n "${PACT_SSH_PRIVATE_KEY_PATH:-}" ] && SSH_PRIVATE_KEY_PATH="${PACT_SSH_PRIVATE_KEY_PATH}"
 [ -n "${PACT_PROXMOX_IS_REMOTE:-}" ] && PROXMOX_IS_REMOTE="${PACT_PROXMOX_IS_REMOTE}"
@@ -113,7 +113,7 @@ CONFIG_FILE_PATH=""
 [ -n "${PACT_DISTRO_BUILD_SELECTION:-}" ] && DISTRO_BUILD_SELECTION="${PACT_DISTRO_BUILD_SELECTION}"
 [ -n "${PACT_PACKER_TOKEN_ID:-}" ] && PACKER_TOKEN_ID="${PACT_PACKER_TOKEN_ID}"
 [ -n "${PACT_PACKER_TOKEN_SECRET:-}" ] && PACKER_TOKEN_SECRET="${PACT_PACKER_TOKEN_SECRET}"
-[ -n "${PACT_CONFIG_FILE_PATH:-}" ] && CONFIG_FILE_PATH="${PACT_CONFIG_FILE_PATH}"
+[ -n "${PACT_ANSWERFILE_PATH:-}" ] && ANSWERFILE_PATH="${PACT_ANSWERFILE_PATH}"
 
 # Define distro metadata: id|name|vmid_offset
 # Maps distro names to their identifiers for easy grouping
@@ -148,7 +148,7 @@ Usage: $0 [OPTIONS]
 Options:
   --interactive              Prompt the user for all settings interactively.
   --run-packer               Run Packer builds for image customization.
-  --rebuild                  Delete existing VMs before building new ones (destructive).
+  --rebuild-templates             Delete existing VMs before building new ones (destructive).
   --proxmox-host=HOSTNAME    Proxmox hostname or IP address (default: pve.local).
   --proxmox-user=USERNAME    SSH username for Proxmox (default: root).
   --proxmox-password=PASS    SSH password for Proxmox authentication.
@@ -157,7 +157,7 @@ Options:
   --proxmox-target-node=NODE Proxmox target node for Packer (default: pve).
   --local                    Run directly on Proxmox host (no SSH needed).
   --templates=LIST           Comma-separated list of templates to build (e.g., debian12,ubuntu2404).
-  --answerfile=PATH          Path to custom answerfile (.env.local used by default if exists).
+  --answerfile-path=PATH          Path to custom answerfile (.env.local used by default if exists).
   --custom-packerfile=PATH   Path or URL to custom Packer template file instead of default.
   --custom-ansible=PATH      Path or URL to custom Ansible playbook for Packer customization.
   --custom-ansible-varfile=PATH  Path or URL to custom variables file for Ansible playbook (default: ./Ansible/Variables/vars.yml).
@@ -168,7 +168,7 @@ Options:
 Notes:
   - If --interactive is set, no other arguments are allowed (it overrides everything).
   - Without --local, defaults to SSH mode (remote Proxmox).
-  - Without --rebuild, existing VMs at target VMIDs are preserved (safer).
+  - Without --rebuild-templates, existing VMs at target VMIDs are preserved (safer).
   - --templates accepts: all, debian, ubuntu, fedora, individual names (debian11, debian12, ubuntu2204, fedora43, etc.)
   - --custom-packerfile allows using a custom Packer template with --packer.
 EOF
@@ -180,8 +180,8 @@ for arg in "$@"; do
         --run-packer)
             RUN_PACKER=true
             ;;
-        --rebuild)
-            REBUILD=true
+        --rebuild-templates)
+            REBUILD_TEMPLATES=true
             ;;
         --interactive)
             INTERACTIVE_MODE=true
@@ -210,8 +210,8 @@ for arg in "$@"; do
         --templates=*)
             DISTRO_BUILD_SELECTION="${arg#*=}"
             ;;
-        --answerfile=*)
-            CONFIG_FILE_PATH="${arg#*=}"
+        --answerfile-path=*)
+            ANSWERFILE_PATH="${arg#*=}"
             ;;
         --custom-packerfile=*)
             CUSTOM_PACKERFILE="${arg#*=}"
@@ -240,10 +240,10 @@ for arg in "$@"; do
     esac
 done
 
-# Source config file if it exists (.env.local by default, or custom path via --answerfile)
+# Source config file if it exists (.env.local by default, or custom path via --answerfile-path)
 # This allows users to pre-configure variables instead of using CLI args or interactive mode
 # Config file values are loaded here and can be overridden by CLI arguments passed above
-CONFIG_FILE_EXPANDED="${CONFIG_FILE_PATH:-.env.local}"
+CONFIG_FILE_EXPANDED="${ANSWERFILE_PATH:-.env.local}"
 # Expand tilde in path
 CONFIG_FILE_EXPANDED="${CONFIG_FILE_EXPANDED/#\~/$HOME}"
 if [ -f "$CONFIG_FILE_EXPANDED" ]; then
@@ -428,9 +428,9 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     
     # Ask about rebuild with VMID information displayed
     echo ""
-    read -p "Delete existing VMs before building (rebuild)? (Y/N) [Default: No]: " -r choice_rebuild
+    read -p "Delete existing VMs before building (rebuild-templates)? (Y/N) [Default: No]: " -r choice_rebuild
     if [[ "$choice_rebuild" =~ ^[Yy]$ ]]; then
-        REBUILD=true
+        REBUILD_TEMPLATES=true
     fi
     
     # If Packer is enabled, ask for Packer configuration
@@ -518,7 +518,7 @@ echo "  Storage Pool: $PROXMOX_STORAGE"
 echo "  Base VMID: $VMID_BASE"
 echo "  Selected Distros: $SELECTED_DISTROS"
 echo "  Run Packer: $RUN_PACKER"
-echo "  Rebuild VMs: $REBUILD"
+echo "  Rebuild Templates: $REBUILD_TEMPLATES"
 echo ""
 
 #####################################################################################
@@ -770,7 +770,7 @@ if [ "$PROXMOX_IS_REMOTE" = true ]; then
     PROXMOX_SCRIPT_ARGS="--vmid-base=$VMID_BASE --proxmox-storage=$PROXMOX_STORAGE"
     
     # Add rebuild flag if enabled
-    if [ "$REBUILD" = true ]; then
+    if [ "$REBUILD_TEMPLATES" = true ]; then
         PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --rebuild"
     fi
     
