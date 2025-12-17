@@ -23,7 +23,7 @@
 #   --help                      Display help message
 #
 # Distro Options:
-#   Individual: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43, rocky9
+#   Individual: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43
 #   Groups:     debian (all Debian versions), ubuntu (all Ubuntu versions), fedora (all Fedora versions)
 #   Special:    all (create all distros)
 #
@@ -31,7 +31,6 @@
 #   debian11: 801,   debian12: 802,   debian13: 803
 #   ubuntu2204: 811, ubuntu2404: 812, ubuntu2504: 813
 #   fedora41: 821,   fedora42: 822,   fedora43: 823
-#   rocky9: 831
 #
 # If Packer is enabled (--run-packer), customized VMs get base+100 offset
 # Example: debian12 base template = 802, Packer customized = 902
@@ -65,7 +64,6 @@ declare -a DISTRO_METADATA=(
     "fedora41|Fedora-41|21|fedora-41-template.qcow2|https://fedora.mirror.constant.com/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2"
     "fedora42|Fedora-42|22|fedora-42-template.qcow2|https://fedora.mirror.constant.com/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2"
     "fedora43|Fedora-43|23|fedora-43-template.qcow2|https://fedora.mirror.constant.com/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2"
-    "rocky9|Rocky-9|31|rocky-9-template.qcow2|http://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud.latest.x86_64.qcow2"
 )
 
 # Map of distro groups to their individual IDs
@@ -73,7 +71,7 @@ declare -A DISTRO_GROUPS=(
     [debian]="debian11 debian12 debian13"
     [ubuntu]="ubuntu2204 ubuntu2404 ubuntu2504"
     [fedora]="fedora41 fedora42 fedora43"
-    [all]="debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43 rocky9"
+    [all]="debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43"
 )
 
 print_usage() {
@@ -87,7 +85,7 @@ Options:
                         all      - build every distro (default)
                         debian   - debian11, debian12, debian13
                         ubuntu   - ubuntu2204, ubuntu2404, ubuntu2504
-                      Individual names: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43, rocky9
+                      Individual names: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43
     --rebuild-templates     Delete existing VMs at target VMIDs before building (destructive).
                       Without this flag, existing VMs are preserved.
     --run-packer      Packer will be used for customization. Checks both base and packer VMIDs.
@@ -130,7 +128,7 @@ else
             SELECTED_DISTROS="${SELECTED_DISTROS} ${DISTRO_GROUPS[$item]}"
         else
             # Check if it's a valid individual distro ID
-            if [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43 rocky9 " =~ " $item " ]]; then
+            if [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43 " =~ " $item " ]]; then
                 SELECTED_DISTROS="${SELECTED_DISTROS} $item"
             else
                 echo "Warning: unknown build item '$item' - ignoring" >&2

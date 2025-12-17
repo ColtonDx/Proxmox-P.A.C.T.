@@ -13,7 +13,6 @@
   - name: "Update system packages (RHEL/Fedora/CentOS)"
     dnf:
         update_cache: yes
-        cache_valid_time: 3600
         name: "*"
         state: latest
     when: ansible_os_family == "RedHat"
