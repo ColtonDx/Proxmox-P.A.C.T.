@@ -4,9 +4,8 @@
 # This Packer template can build images for multiple distributions by passing
 # the 'distro' variable. Supported distros:
 #   - debian11, debian12, debian13
-#   - ubuntu2204, ubuntu2205, ubuntu2404, ubuntu2504
-#   - fedora41
-#   - rocky9
+#   - ubuntu2204, ubuntu2404, ubuntu2504
+#   - fedora41, fedora42, fedora43
 #
 # Usage:
 #   packer build -var "distro=debian12" -var-file=vars.json universal.pkr.hcl
@@ -61,7 +60,7 @@ variable "vmid" {
 
 variable "distro" {
     type = string
-    description = "Distribution to build (debian11, debian12, debian13, ubuntu2204, ubuntu2205, ubuntu2404, ubuntu2504, fedora41, rocky9)"
+    description = "Distribution to build (debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43)"
 }
 
 variable "ansible_playbook" {
@@ -99,11 +98,6 @@ locals {
       vm_name        = "PACT-Ubuntu-2204"
       build_name     = "Ubuntu2204-Packer"
     }
-    ubuntu2205 = {
-      template_name  = "Template-Ubuntu-2205"
-      vm_name        = "PACT-Ubuntu-2205"
-      build_name     = "Ubuntu2205-Packer"
-    }
     ubuntu2404 = {
       template_name  = "Template-Ubuntu-2404"
       vm_name        = "PACT-Ubuntu-2404"
@@ -119,7 +113,17 @@ locals {
       vm_name        = "PACT-Fedora-41"
       build_name     = "Fedora41-Packer"
     }
- }
+    fedora42 = {
+      template_name  = "Template-Fedora-42"
+      vm_name        = "PACT-Fedora-42"
+      build_name     = "Fedora42-Packer"
+    }
+    fedora43 = {
+      template_name  = "Template-Fedora-43"
+      vm_name        = "PACT-Fedora-43"
+      build_name     = "Fedora43-Packer"
+    }
+  }
 
   config = local.distro_config[var.distro]
   build_time = timestamp()
