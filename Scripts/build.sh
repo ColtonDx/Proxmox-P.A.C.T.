@@ -610,7 +610,7 @@ packer_build() {
     fi
     
     packer build \
-        -var "proxmox_host_node=$PROXMOX_TARGET_NODE" \
+        -var "proxmox_target_node=$PROXMOX_TARGET_NODE" \
         -var "proxmox_api_url=https://${PROXMOX_HOST}:8006/api2/json" \
         -var "proxmox_api_token_id=$PACKER_TOKEN_ID" \
         -var "proxmox_api_token_secret=$PACKER_TOKEN_SECRET" \
