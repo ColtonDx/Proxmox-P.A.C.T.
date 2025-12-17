@@ -119,12 +119,7 @@ locals {
       vm_name        = "PACT-Fedora-41"
       build_name     = "Fedora41-Packer"
     }
-    rocky9 = {
-      template_name  = "Template-Rocky-9"
-      vm_name        = "PACT-Rocky-9"
-      build_name     = "Rocky9-Packer"
-    }
-  }
+ }
 
   config = local.distro_config[var.distro]
   build_time = timestamp()
