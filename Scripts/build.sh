@@ -777,7 +777,7 @@ if [ "$PROXMOX_IS_REMOTE" = true ]; then
     
     # Add rebuild flag if enabled
     if [ "$REBUILD_TEMPLATES" = true ]; then
-        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --rebuild"
+        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --rebuild-templates"
     fi
     
     # Add run-packer flag if Packer will be run
