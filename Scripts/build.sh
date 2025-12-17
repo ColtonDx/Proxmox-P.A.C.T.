@@ -55,7 +55,7 @@
 #
 # Answerfile (.env.local) variables:
 #   PROXMOX_HOST                   Proxmox hostname (overridden by CLI args)
-#   PROXMOX_HOST_NODE              Proxmox cluster node name (default: pve)
+#   PROXMOX_TARGET_NODE            Proxmox cluster node name (default: pve)
 #   PROXMOX_SSH_USER               SSH username (overridden by CLI args)
 #   PROXMOX_SSH_PASSWORD           SSH password (overridden by CLI args)
 #   SSH_PRIVATE_KEY_PATH           SSH key path (overridden by CLI args)
@@ -141,6 +141,7 @@ Options:
   --proxmox-password=PASS    SSH password for Proxmox authentication.
   --proxmox-key=PATH         Path to SSH private key for authentication.
   --proxmox-storage=POOL     Proxmox storage pool name (default: local-lvm).
+  --proxmox-target-node=NODE Proxmox target node for Packer (default: pve).
   --local                    Run directly on Proxmox host (no SSH needed).
   --templates=LIST           Comma-separated list of templates to build (e.g., debian12,ubuntu2404).
   --answerfile=PATH          Path to custom answerfile (.env.local used by default if exists).
@@ -190,6 +191,9 @@ for arg in "$@"; do
             ;;
         --proxmox-storage=*)
             PROXMOX_STORAGE="${arg#*=}"
+            ;;
+        --proxmox-target-node=*)
+            PROXMOX_TARGET_NODE="${arg#*=}"
             ;;
         --local)
             PROXMOX_IS_REMOTE=false
@@ -265,35 +269,9 @@ fi
 # Set defaults for unset variables (CLI arguments take precedence)
 : "${PROXMOX_SSH_USER:=root}"
 : "${PROXMOX_HOST:=pve.local}"
-: "${PROXMOX_HOST_NODE:=pve}"
+: "${PROXMOX_TARGET_NODE:=pve}"
 : "${PROXMOX_STORAGE:=local-lvm}"
 : "${VMID_BASE:=800}"
-
-# Parse DISTRO_BUILD_SELECTION and populate SELECTED_DISTROS
-# DISTRO_BUILD_SELECTION can be set via: --templates=, config file, or interactive mode
-if [ -n "$DISTRO_BUILD_SELECTION" ]; then
-    if [ "$DISTRO_BUILD_SELECTION" = "all" ]; then
-        SELECTED_DISTROS="${DISTRO_GROUPS[all]}"
-    else
-        # Parse comma or space separated list
-        items="$(echo "$DISTRO_BUILD_SELECTION" | tr ',' ' ')"
-        for item in $items; do
-            if [ -n "${DISTRO_GROUPS[$item]}" ]; then
-                # It's a group (debian, ubuntu, fedora, etc.)
-                SELECTED_DISTROS="${SELECTED_DISTROS} ${DISTRO_GROUPS[$item]}"
-            elif [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43 rocky9 " =~ " $item " ]]; then
-                # It's a valid individual distro
-                SELECTED_DISTROS="${SELECTED_DISTROS} $item"
-                else
-                    echo "Error: Unknown template '$item'" >&2
-                    echo "Valid options: all, debian, ubuntu, fedora, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43, rocky9" >&2
-                exit 1
-            fi
-        done
-        # Remove duplicates and normalize spacing
-        SELECTED_DISTROS="$(echo "$SELECTED_DISTROS" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)"
-    fi
-fi
 
 #####################################################################################
 # INTERACTIVE MODE
@@ -481,6 +459,32 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     echo ""
 fi
 
+# Parse DISTRO_BUILD_SELECTION and populate SELECTED_DISTROS
+# DISTRO_BUILD_SELECTION can be set via: --templates=, config file, or interactive mode
+if [ -n "$DISTRO_BUILD_SELECTION" ]; then
+    if [ "$DISTRO_BUILD_SELECTION" = "all" ]; then
+        SELECTED_DISTROS="${DISTRO_GROUPS[all]}"
+    else
+        # Parse comma or space separated list
+        items="$(echo "$DISTRO_BUILD_SELECTION" | tr ',' ' ')"
+        for item in $items; do
+            if [ -n "${DISTRO_GROUPS[$item]}" ]; then
+                # It's a group (debian, ubuntu, fedora, etc.)
+                SELECTED_DISTROS="${SELECTED_DISTROS} ${DISTRO_GROUPS[$item]}"
+            elif [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43 rocky9 " =~ " $item " ]]; then
+                # It's a valid individual distro
+                SELECTED_DISTROS="${SELECTED_DISTROS} $item"
+                else
+                    echo "Error: Unknown template '$item'" >&2
+                    echo "Valid options: all, debian, ubuntu, fedora, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43, rocky9" >&2
+                exit 1
+            fi
+        done
+        # Remove duplicates and normalize spacing
+        SELECTED_DISTROS="$(echo "$SELECTED_DISTROS" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)"
+    fi
+fi
+
 # Validate required variables for Packer
 if [ "$RUN_PACKER" = true ]; then
     if [ -z "$PACKER_TOKEN_ID" ] || [ -z "$PACKER_TOKEN_SECRET" ]; then
@@ -606,7 +610,7 @@ packer_build() {
     fi
     
     packer build \
-        -var "proxmox_host_node=$PROXMOX_TARGET_NODE" \
+        -var "proxmox_target_node=$PROXMOX_TARGET_NODE" \
         -var "proxmox_api_url=https://${PROXMOX_HOST}:8006/api2/json" \
         -var "proxmox_api_token_id=$PACKER_TOKEN_ID" \
         -var "proxmox_api_token_secret=$PACKER_TOKEN_SECRET" \
