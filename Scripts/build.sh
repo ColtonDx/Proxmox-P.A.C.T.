@@ -37,15 +37,15 @@
 #   --rebuild-templates                   Delete existing VMs before rebuilding (destructive)
 #   --local                        Run directly on Proxmox host (no SSH needed)
 #   --proxmox-host=HOSTNAME        Proxmox hostname or IP address
-#   --proxmox-user=USERNAME        SSH username for Proxmox (default: root)
-#   --proxmox-password=PASS        SSH password for Proxmox authentication
-#   --proxmox-key=PATH             Path to SSH private key for authentication
+#   --proxmox-ssh-user=USERNAME        SSH username for Proxmox (default: root)
+#   --proxmox-ssh-password=PASS    SSH password for Proxmox authentication
+#   --ssh-private-key-path=PATH   Path to SSH private key for authentication
 #   --proxmox-storage=POOL         Proxmox storage pool name (default: local-lvm)
-#   --templates=LIST               Comma-separated list of distros to build (e.g., debian12,ubuntu2404)
+#   --build-distros=LIST               Comma-separated list of distros to build (e.g., debian12,ubuntu2404)
 #                                  Also accepts: all, debian, ubuntu
 #   --answerfile-path=PATH              Path to custom answerfile (.env.local used by default if exists)
 #   --custom-packerfile=PATH       Path to custom Packer template file
-#   --custom-ansible=PATH          Path to custom Ansible playbook for Packer
+#   --custom-ansible-playbook=PATH     Path to custom Ansible playbook for Packer
 #   --custom-ansible-varfile=PATH  Path to custom variables file for Ansible in Packer
 #   --packer-token-id=TOKEN        Proxmox API Token ID for Packer
 #   --packer-token-secret=SEC      Proxmox API Token Secret for Packer
@@ -59,7 +59,7 @@
 #   SSH_PRIVATE_KEY_PATH           SSH key path (overridden by CLI args)
 #   PROXMOX_STORAGE                Storage pool name (overridden by CLI args)
 #   VMID_BASE                      Base VMID for templates (overridden by CLI args)
-#   DISTRO_BUILD_SELECTION          Distros to build, comma-separated (overridden by CLI args)
+#   BUILD_DISTROS                   Distros to build, comma-separated (overridden by CLI args)
 #   PROXMOX_IS_REMOTE              Use SSH to Proxmox (true/false, default: true)
 #   RUN_PACKER                     Enable Packer customization (true/false, default: false)
 #   REBUILD_TEMPLATES                     Delete existing VMs before building (true/false, default: false)
@@ -92,7 +92,7 @@ PROXMOX_IS_REMOTE=true
 CUSTOM_PACKERFILE=""
 CUSTOM_ANSIBLE_PLAYBOOK=""
 CUSTOM_ANSIBLE_VARFILE=""
-DISTRO_BUILD_SELECTION=""
+BUILD_DISTROS=""
 PACKER_TOKEN_ID=""
 PACKER_TOKEN_SECRET=""
 ANSWERFILE_PATH=""
@@ -110,10 +110,16 @@ ANSWERFILE_PATH=""
 [ -n "${PACT_CUSTOM_PACKERFILE:-}" ] && CUSTOM_PACKERFILE="${PACT_CUSTOM_PACKERFILE}"
 [ -n "${PACT_CUSTOM_ANSIBLE_PLAYBOOK:-}" ] && CUSTOM_ANSIBLE_PLAYBOOK="${PACT_CUSTOM_ANSIBLE_PLAYBOOK}"
 [ -n "${PACT_CUSTOM_ANSIBLE_VARFILE:-}" ] && CUSTOM_ANSIBLE_VARFILE="${PACT_CUSTOM_ANSIBLE_VARFILE}"
-[ -n "${PACT_DISTRO_BUILD_SELECTION:-}" ] && DISTRO_BUILD_SELECTION="${PACT_DISTRO_BUILD_SELECTION}"
+[ -n "${PACT_BUILD_DISTROS:-}" ] && BUILD_DISTROS="${PACT_BUILD_DISTROS}"
 [ -n "${PACT_PACKER_TOKEN_ID:-}" ] && PACKER_TOKEN_ID="${PACT_PACKER_TOKEN_ID}"
 [ -n "${PACT_PACKER_TOKEN_SECRET:-}" ] && PACKER_TOKEN_SECRET="${PACT_PACKER_TOKEN_SECRET}"
 [ -n "${PACT_ANSWERFILE_PATH:-}" ] && ANSWERFILE_PATH="${PACT_ANSWERFILE_PATH}"
+[ -n "${PACT_PROXMOX_HOST:-}" ] && PROXMOX_HOST="${PACT_PROXMOX_HOST}"
+[ -n "${PACT_PROXMOX_SSH_USER:-}" ] && PROXMOX_SSH_USER="${PACT_PROXMOX_SSH_USER}"
+[ -n "${PACT_PROXMOX_SSH_PASSWORD:-}" ] && PROXMOX_SSH_PASSWORD="${PACT_PROXMOX_SSH_PASSWORD}"
+[ -n "${PACT_PROXMOX_STORAGE:-}" ] && PROXMOX_STORAGE="${PACT_PROXMOX_STORAGE}"
+[ -n "${PACT_PROXMOX_TARGET_NODE:-}" ] && PROXMOX_TARGET_NODE="${PACT_PROXMOX_TARGET_NODE}"
+[ -n "${PACT_VMID_BASE:-}" ] && VMID_BASE="${PACT_VMID_BASE}"
 
 # Define distro metadata: id|name|vmid_offset
 # Maps distro names to their identifiers for easy grouping
@@ -189,13 +195,13 @@ for arg in "$@"; do
         --proxmox-host=*)
             PROXMOX_HOST="${arg#*=}"
             ;;
-        --proxmox-user=*)
+        --proxmox-ssh-user=*)
             PROXMOX_SSH_USER="${arg#*=}"
             ;;
-        --proxmox-password=*)
+        --proxmox-ssh-password=*)
             PROXMOX_SSH_PASSWORD="${arg#*=}"
             ;;
-        --proxmox-key=*)
+        --ssh-private-key-path=*)
             SSH_PRIVATE_KEY_PATH="${arg#*=}"
             ;;
         --proxmox-storage=*)
@@ -207,8 +213,8 @@ for arg in "$@"; do
         --local)
             PROXMOX_IS_REMOTE=false
             ;;
-        --templates=*)
-            DISTRO_BUILD_SELECTION="${arg#*=}"
+        --build-distros=*)
+            BUILD_DISTROS="${arg#*=}"
             ;;
         --answerfile-path=*)
             ANSWERFILE_PATH="${arg#*=}"
@@ -216,7 +222,7 @@ for arg in "$@"; do
         --custom-packerfile=*)
             CUSTOM_PACKERFILE="${arg#*=}"
             ;;
-        --custom-ansible=*)
+        --custom-ansible-playbook=*)
             CUSTOM_ANSIBLE_PLAYBOOK="${arg#*=}"
             ;;
         --custom-ansible-varfile=*)
@@ -298,19 +304,19 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     while [ "$BUILD_VALID" = false ]; do
         read -p "Enter comma-separated list (or 'all' for all distros) [Default: all]: " -r build_input
         if [ -z "$build_input" ]; then
-            DISTRO_BUILD_SELECTION="all"
+            BUILD_DISTROS="all"
         else
-            DISTRO_BUILD_SELECTION="$build_input"
+            BUILD_DISTROS="$build_input"
         fi
         
         # Parse the input
         SELECTED_DISTROS=""
-        if [ "$DISTRO_BUILD_SELECTION" = "all" ]; then
+        if [ "$BUILD_DISTROS" = "all" ]; then
             SELECTED_DISTROS="${DISTRO_GROUPS[all]}"
             BUILD_VALID=true
         else
             # Parse comma-separated list
-            items="$(echo "$DISTRO_BUILD_SELECTION" | tr ',' ' ')"
+            items="$(echo "$BUILD_DISTROS" | tr ',' ' ')"
             INVALID_ITEMS=""
             for it in $items; do
                 if [ -n "${DISTRO_GROUPS[$it]}" ]; then
@@ -468,14 +474,14 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     echo ""
 fi
 
-# Parse DISTRO_BUILD_SELECTION and populate SELECTED_DISTROS
-# DISTRO_BUILD_SELECTION can be set via: --templates=, config file, or interactive mode
-if [ -n "$DISTRO_BUILD_SELECTION" ]; then
-    if [ "$DISTRO_BUILD_SELECTION" = "all" ]; then
+# Parse BUILD_DISTROS and populate SELECTED_DISTROS
+# BUILD_DISTROS can be set via: --build-distros=, config file, or interactive mode
+if [ -n "$BUILD_DISTROS" ]; then
+    if [ "$BUILD_DISTROS" = "all" ]; then
         SELECTED_DISTROS="${DISTRO_GROUPS[all]}"
     else
         # Parse comma or space separated list
-        items="$(echo "$DISTRO_BUILD_SELECTION" | tr ',' ' ')"
+        items="$(echo "$BUILD_DISTROS" | tr ',' ' ')"
         for item in $items; do
             if [ -n "${DISTRO_GROUPS[$item]}" ]; then
                 # It's a group (debian, ubuntu, fedora, etc.)
@@ -505,7 +511,7 @@ fi
 # Validate that at least one distro is selected
 if [ -z "$SELECTED_DISTROS" ]; then
     echo "Error: At least one distro must be selected" >&2
-    echo "Use --interactive mode for guidance or set DISTRO_BUILD_SELECTION via CLI/config file" >&2
+    echo "Use --interactive mode for guidance or set BUILD_DISTROS via CLI/config file" >&2
     exit 1
 fi
 
@@ -780,8 +786,8 @@ if [ "$PROXMOX_IS_REMOTE" = true ]; then
     fi
     
     # Add build list to arguments
-    if [ -n "$DISTRO_BUILD_SELECTION" ]; then
-        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --build=$DISTRO_BUILD_SELECTION"
+    if [ -n "$BUILD_DISTROS" ]; then
+        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --build=$BUILD_DISTROS"
     fi
     
     # Determine if using key-based authentication
@@ -826,8 +832,8 @@ else
     # Build proxmox.sh arguments
     PROXMOX_SCRIPT_ARGS="--vmid-base=$VMID_BASE --proxmox-storage=$PROXMOX_STORAGE"
     
-    if [ "$REBUILD" = true ]; then
-        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --rebuild"
+    if [ "$REBUILD_TEMPLATES" = true ]; then
+        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --rebuild-templates"
     fi
     
     if [ "$RUN_PACKER" = true ]; then
@@ -835,8 +841,8 @@ else
     fi
     
     # Add build list to arguments
-    if [ -n "$DISTRO_BUILD_SELECTION" ]; then
-        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --build=$DISTRO_BUILD_SELECTION"
+    if [ -n "$BUILD_DISTROS" ]; then
+        PROXMOX_SCRIPT_ARGS="$PROXMOX_SCRIPT_ARGS --build=$BUILD_DISTROS"
     fi
     
     # Create unique local working directory and run

@@ -10,7 +10,7 @@ The workflow has three deployment modes for template creation:
 ### SSH Mode (Default)
 1. **On your management machine**: 
    - Reads configuration from CLI arguments, interactive mode, or from an answerfile
-   - Builds a list of distros to process based on enabled options or explicit `--templates` parameter
+   - Builds a list of distros to process based on enabled options or explicit `--build-distros` parameter
    - Connects to Proxmox via SSH using password or key-based authentication
    - Uploads `proxmox.sh` script with CLI parameters (`--vmid-base`, `--proxmox-storage`, `--build`)
    - Executes proxmox.sh remotely
@@ -31,7 +31,7 @@ After base templates are created (regardless of whether SSH or Ansible mode was 
 
 1. **Packer customization**:
    - `build.sh` with `--packer` flag runs universal.pkr.hcl (or custom packerfile with `--custom-packer`) against created templates
-   - Uses Ansible provisioning internally via `image_customizations.yml` (or custom playbook with `--custom-ansible`)
+    - Uses Ansible provisioning internally via `image_customizations.yml` (or custom playbook with `--custom-ansible-playbook`)
    - Supports all 9 distros with single template file using distro parameter
    - Requires Proxmox API Token for authentication
 
@@ -58,7 +58,7 @@ After base templates are created (regardless of whether SSH or Ansible mode was 
 
 - **Ansible/**
   - **Playbooks/**: 
-    - **image_customizations.yml**: Default Ansible playbook for post-creation template customization (detects OS family for package manager compatibility). This playbook is used by Packer when running with `--packer` flag unless overridden with `--custom-ansible`
+    - **image_customizations.yml**: Default Ansible playbook for post-creation template customization (detects OS family for package manager compatibility). This playbook is used by Packer when running with `--run-packer` flag unless overridden with `--custom-ansible-playbook`
   - **Variables/**: 
     - **vars.yml**: Variables for Ansible playbooks including template creation flags (Create_Debian11, Create_Ubuntu2404, etc.) and Proxmox connection details
 
@@ -106,9 +106,9 @@ After base templates are created (regardless of whether SSH or Ansible mode was 
    ```bash
    ./Scripts/build.sh \
      --proxmox-host=pve.local \
-     --proxmox-user=root \
-     --proxmox-password="your_password" \
-     --storage=local-lvm
+     --proxmox-ssh-user=root \
+     --proxmox-ssh-password="your_password" \
+     --proxmox-storage=local-lvm
    ```
 
 ### Interactive Mode Guide
@@ -184,14 +184,14 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
 - `--packer` - Enable Packer customization phase
 - `--rebuild` - Delete existing VMs before building (destructive)
 - `--proxmox-host=HOSTNAME` - Proxmox hostname or IP address (default: pve.local)
-- `--proxmox-user=USERNAME` - SSH username for Proxmox (default: root)
-- `--proxmox-password=PASS` - SSH password for Proxmox authentication
-- `--proxmox-key=PATH` - Path to SSH private key for authentication
+- `--proxmox-ssh-user=USERNAME` - SSH username for Proxmox (default: root)
+- `--proxmox-ssh-password=PASS` - SSH password for Proxmox authentication
+- `--ssh-private-key-path=PATH` - Path to SSH private key for authentication
 - `--storage=POOL` - Proxmox storage pool name (default: local-lvm)
 - `--local` - Run directly on Proxmox host (no SSH needed)
-- `--templates=LIST` - Comma-separated list of templates to build (e.g., debian12,ubuntu2404, all, debian, ubuntu)
+- `--build-distros=LIST` - Comma-separated list of distros to build (e.g., debian12,ubuntu2404, all, debian, ubuntu)
 - `--custom-packerfile=PATH_OR_URL` - Path or URL to custom Packer template file (used with --packer)
-- `--custom-ansible=PATH_OR_URL` - Path or URL to custom Ansible playbook for template customization (default: ./Ansible/Playbooks/image_customizations.yml)
+- `--custom-ansible-playbook=PATH_OR_URL` - Path or URL to custom Ansible playbook for template customization (default: ./Ansible/Playbooks/image_customizations.yml)
 - `--custom-ansible-varfile=PATH_OR_URL` - Path or URL to custom Ansible variables file (default: ./Ansible/Variables/vars.yml)
 - `--packer-token-id=TOKEN` - Proxmox API Token ID for Packer (required with --packer, or prompted in interactive mode)
 - `--packer-token-secret=SECRET` - Proxmox API Token Secret for Packer (required with --packer, or prompted in interactive mode)
@@ -202,15 +202,15 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
 # Remote Proxmox with SSH password, no Packer
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
-  --proxmox-user=root \
-  --proxmox-password="password"
+  --proxmox-ssh-user=root \
+  --proxmox-ssh-password="password"
 
 # Remote Proxmox with SSH key and Packer
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
-  --proxmox-user=root \
-  --proxmox-key=/home/user/.ssh/id_rsa \
-  --packer
+  --proxmox-ssh-user=root \
+  --ssh-private-key-path=/home/user/.ssh/id_rsa \
+  --run-packer
 
 # Local Proxmox execution with Packer
 ./Scripts/build.sh \
@@ -221,70 +221,69 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
 # Build specific templates only
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
-  --proxmox-user=root \
-  --proxmox-password="password" \
-  --templates=debian12,ubuntu2404
+  --proxmox-ssh-user=root \
+  --proxmox-ssh-password="password" \
+  --build-distros=debian12,ubuntu2404
 
 # Build all Debian templates
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
-  --proxmox-user=root \
-  --proxmox-password="password" \
-  --templates=debian
+  --proxmox-ssh-user=root \
+  --proxmox-ssh-password="password" \
+  --build-distros=debian
 
 # Using Ansible instead of proxmox.sh
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
-  --proxmox-user=root \
-  --proxmox-password="password" \
-  --ansible \
-  --packer
+  --proxmox-ssh-user=root \
+  --proxmox-ssh-password="password" \
+  --run-packer
 
 # With custom Packer template (local path)
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
-  --proxmox-user=root \
-  --proxmox-password="password" \
-  --packer \
+  --proxmox-ssh-user=root \
+  --proxmox-ssh-password="password" \
+  --run-packer \
   --custom-packerfile=/path/to/custom.pkr.hcl
 
 # With custom Packer template (URL)
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
-  --proxmox-user=root \
-  --proxmox-password="password" \
-  --packer \
+  --proxmox-ssh-user=root \
+  --proxmox-ssh-password="password" \
+  --run-packer \
   --custom-packerfile=https://example.com/custom.pkr.hcl
 
 # With custom Ansible playbook (local path or URL)
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
-  --proxmox-user=root \
-  --proxmox-password="password" \
-  --packer \
-  --custom-ansible=/path/to/custom_playbook.yml \
+  --proxmox-ssh-user=root \
+  --proxmox-ssh-password="password" \
+  --run-packer \
+  --custom-ansible-playbook=/path/to/custom_playbook.yml \
   --custom-ansible-varfile=https://example.com/vars.yml
 
 # With Packer API tokens provided via CLI (fully automated, no interactive prompts)
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
-  --proxmox-user=root \
-  --proxmox-password="password" \
-  --packer \
+  --proxmox-ssh-user=root \
+  --proxmox-ssh-password="password" \
+  --run-packer \
   --packer-token-id="user@pam!token_id" \
   --packer-token-secret="your-secret-token"
 
 # With all options specified
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
-  --proxmox-user=root \
-  --proxmox-key=/home/user/.ssh/id_rsa \
-  --storage=local-lvm \
-  --templates=all \
-  --packer \
+  --proxmox-ssh-user=root \
+  --ssh-private-key-path=/home/user/.ssh/id_rsa \
+  --proxmox-storage=local-lvm \
+  --build-distros=all \
+  --run-packer \
   --packer-token-id="user@pam!token_id" \
   --packer-token-secret="your-secret-token" \
-  --rebuild
+  --rebuild-templates
 ```
 
 ## Usage Examples
