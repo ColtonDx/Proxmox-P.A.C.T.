@@ -55,7 +55,7 @@
 #
 # Answerfile (.env.local) variables:
 #   PROXMOX_HOST                   Proxmox hostname (overridden by CLI args)
-#   PROXMOX_HOST_NODE              Proxmox cluster node name (default: pve)
+#   PROXMOX_TARGET_NODE            Proxmox cluster node name (default: pve)
 #   PROXMOX_SSH_USER               SSH username (overridden by CLI args)
 #   PROXMOX_SSH_PASSWORD           SSH password (overridden by CLI args)
 #   SSH_PRIVATE_KEY_PATH           SSH key path (overridden by CLI args)
@@ -141,6 +141,7 @@ Options:
   --proxmox-password=PASS    SSH password for Proxmox authentication.
   --proxmox-key=PATH         Path to SSH private key for authentication.
   --proxmox-storage=POOL     Proxmox storage pool name (default: local-lvm).
+  --proxmox-target-node=NODE Proxmox target node for Packer (default: pve).
   --local                    Run directly on Proxmox host (no SSH needed).
   --templates=LIST           Comma-separated list of templates to build (e.g., debian12,ubuntu2404).
   --answerfile=PATH          Path to custom answerfile (.env.local used by default if exists).
@@ -190,6 +191,9 @@ for arg in "$@"; do
             ;;
         --proxmox-storage=*)
             PROXMOX_STORAGE="${arg#*=}"
+            ;;
+        --proxmox-target-node=*)
+            PROXMOX_TARGET_NODE="${arg#*=}"
             ;;
         --local)
             PROXMOX_IS_REMOTE=false
@@ -265,7 +269,7 @@ fi
 # Set defaults for unset variables (CLI arguments take precedence)
 : "${PROXMOX_SSH_USER:=root}"
 : "${PROXMOX_HOST:=pve.local}"
-: "${PROXMOX_HOST_NODE:=pve}"
+: "${PROXMOX_TARGET_NODE:=pve}"
 : "${PROXMOX_STORAGE:=local-lvm}"
 : "${VMID_BASE:=800}"
 
