@@ -269,32 +269,6 @@ fi
 : "${PROXMOX_STORAGE:=local-lvm}"
 : "${VMID_BASE:=800}"
 
-# Parse DISTRO_BUILD_SELECTION and populate SELECTED_DISTROS
-# DISTRO_BUILD_SELECTION can be set via: --templates=, config file, or interactive mode
-if [ -n "$DISTRO_BUILD_SELECTION" ]; then
-    if [ "$DISTRO_BUILD_SELECTION" = "all" ]; then
-        SELECTED_DISTROS="${DISTRO_GROUPS[all]}"
-    else
-        # Parse comma or space separated list
-        items="$(echo "$DISTRO_BUILD_SELECTION" | tr ',' ' ')"
-        for item in $items; do
-            if [ -n "${DISTRO_GROUPS[$item]}" ]; then
-                # It's a group (debian, ubuntu, fedora, etc.)
-                SELECTED_DISTROS="${SELECTED_DISTROS} ${DISTRO_GROUPS[$item]}"
-            elif [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43 rocky9 " =~ " $item " ]]; then
-                # It's a valid individual distro
-                SELECTED_DISTROS="${SELECTED_DISTROS} $item"
-                else
-                    echo "Error: Unknown template '$item'" >&2
-                    echo "Valid options: all, debian, ubuntu, fedora, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43, rocky9" >&2
-                exit 1
-            fi
-        done
-        # Remove duplicates and normalize spacing
-        SELECTED_DISTROS="$(echo "$SELECTED_DISTROS" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)"
-    fi
-fi
-
 #####################################################################################
 # INTERACTIVE MODE
 #####################################################################################
@@ -479,6 +453,32 @@ if [ "$INTERACTIVE_MODE" = true ]; then
     fi
     
     echo ""
+fi
+
+# Parse DISTRO_BUILD_SELECTION and populate SELECTED_DISTROS
+# DISTRO_BUILD_SELECTION can be set via: --templates=, config file, or interactive mode
+if [ -n "$DISTRO_BUILD_SELECTION" ]; then
+    if [ "$DISTRO_BUILD_SELECTION" = "all" ]; then
+        SELECTED_DISTROS="${DISTRO_GROUPS[all]}"
+    else
+        # Parse comma or space separated list
+        items="$(echo "$DISTRO_BUILD_SELECTION" | tr ',' ' ')"
+        for item in $items; do
+            if [ -n "${DISTRO_GROUPS[$item]}" ]; then
+                # It's a group (debian, ubuntu, fedora, etc.)
+                SELECTED_DISTROS="${SELECTED_DISTROS} ${DISTRO_GROUPS[$item]}"
+            elif [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43 rocky9 " =~ " $item " ]]; then
+                # It's a valid individual distro
+                SELECTED_DISTROS="${SELECTED_DISTROS} $item"
+                else
+                    echo "Error: Unknown template '$item'" >&2
+                    echo "Valid options: all, debian, ubuntu, fedora, debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43, rocky9" >&2
+                exit 1
+            fi
+        done
+        # Remove duplicates and normalize spacing
+        SELECTED_DISTROS="$(echo "$SELECTED_DISTROS" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)"
+    fi
 fi
 
 # Validate required variables for Packer
