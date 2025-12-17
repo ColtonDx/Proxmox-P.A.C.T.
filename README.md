@@ -21,18 +21,6 @@ The workflow has three deployment modes for template creation:
    - Converts VMs to templates
    - Cleans up temporary resources
 
-### Ansible Mode (Alternative to SSH)
-1. **On your management machine**:
-   - Installs Ansible dependencies
-   - Executes `Ansible/Playbooks/create_templates.yml` which connects to Proxmox
-   - Ansible handles template creation instead of using proxmox.sh
-
-2. **On Proxmox** (via Ansible tasks):
-   - Creates templates based on Ansible task configuration
-   - More flexible for complex customizations
-
-**Note**: Using `--ansible` only affects how base templates are created (Ansible instead of SSH). It does NOT impact the optional Packer customization phase, which uses Ansible playbooks regardless of which template creation method was chosen.
-
 ### Standalone Mode (Direct on Proxmox)
 - Copy `build.sh` directly to your Proxmox host
 - Execute locally without SSH: `./build.sh --local`
@@ -42,7 +30,7 @@ The workflow has three deployment modes for template creation:
 After base templates are created (regardless of whether SSH or Ansible mode was used), Packer can optionally customize templates:
 
 1. **Packer customization**:
-   - `build.sh` with `--packer` flag runs universal.pkr.hcl against created templates
+   - `build.sh` with `--packer` flag runs universal.pkr.hcl (or custom packerfile with `--custom-packer`) against created templates
    - Uses Ansible provisioning internally via `image_customizations.yml` (or custom playbook with `--custom-ansible`)
    - Supports all 9 distros with single template file using distro parameter
    - Requires Proxmox API Token for authentication
@@ -70,8 +58,6 @@ After base templates are created (regardless of whether SSH or Ansible mode was 
 
 - **Ansible/**
   - **Playbooks/**: 
-    - **create_templates.yml**: Main playbook for creating templates via Ansible (alternative to SSH mode). Uses `Create_*` flags in vars.yml
-    - **tasks/create_template.yml**: Reusable task for individual template creation
     - **image_customizations.yml**: Default Ansible playbook for post-creation template customization (detects OS family for package manager compatibility). This playbook is used by Packer when running with `--packer` flag unless overridden with `--custom-ansible`
   - **Variables/**: 
     - **vars.yml**: Variables for Ansible playbooks including template creation flags (Create_Debian11, Create_Ubuntu2404, etc.) and Proxmox connection details

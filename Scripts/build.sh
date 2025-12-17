@@ -15,7 +15,7 @@
 #  * Local mode (--local): Run directly on Proxmox host without SSH
 #
 # Optional Packer customization:
-#  * --packer: Enable Packer customization phase with API tokens
+#  * --run-packer: Enable Packer customization phase with API tokens
 #  * --custom-packerfile: Use custom Packer template (local path or URL)
 #  * --custom-ansible: Use custom Ansible playbook in Packer (local path or URL)
 #  * --custom-ansible-varfile: Use custom variables file in Packer (local path or URL)
@@ -97,6 +97,24 @@ PACKER_TOKEN_ID=""
 PACKER_TOKEN_SECRET=""
 CONFIG_FILE_PATH=""
 
+#####################################################################################
+# LOAD ENVIRONMENT VARIABLES (PACT_ PREFIX)
+#####################################################################################
+# Check for environment variables with PACT_ prefix and override defaults if set
+# Priority: Environment Variables (PACT_*) > Script Defaults
+[ -n "${PACT_RUN_PACKER:-}" ] && RUN_PACKER="${PACT_RUN_PACKER}"
+[ -n "${PACT_REBUILD:-}" ] && REBUILD="${PACT_REBUILD}"
+[ -n "${PACT_INTERACTIVE_MODE:-}" ] && INTERACTIVE_MODE="${PACT_INTERACTIVE_MODE}"
+[ -n "${PACT_SSH_PRIVATE_KEY_PATH:-}" ] && SSH_PRIVATE_KEY_PATH="${PACT_SSH_PRIVATE_KEY_PATH}"
+[ -n "${PACT_PROXMOX_IS_REMOTE:-}" ] && PROXMOX_IS_REMOTE="${PACT_PROXMOX_IS_REMOTE}"
+[ -n "${PACT_CUSTOM_PACKERFILE:-}" ] && CUSTOM_PACKERFILE="${PACT_CUSTOM_PACKERFILE}"
+[ -n "${PACT_CUSTOM_ANSIBLE_PLAYBOOK:-}" ] && CUSTOM_ANSIBLE_PLAYBOOK="${PACT_CUSTOM_ANSIBLE_PLAYBOOK}"
+[ -n "${PACT_CUSTOM_ANSIBLE_VARFILE:-}" ] && CUSTOM_ANSIBLE_VARFILE="${PACT_CUSTOM_ANSIBLE_VARFILE}"
+[ -n "${PACT_DISTRO_BUILD_SELECTION:-}" ] && DISTRO_BUILD_SELECTION="${PACT_DISTRO_BUILD_SELECTION}"
+[ -n "${PACT_PACKER_TOKEN_ID:-}" ] && PACKER_TOKEN_ID="${PACT_PACKER_TOKEN_ID}"
+[ -n "${PACT_PACKER_TOKEN_SECRET:-}" ] && PACKER_TOKEN_SECRET="${PACT_PACKER_TOKEN_SECRET}"
+[ -n "${PACT_CONFIG_FILE_PATH:-}" ] && CONFIG_FILE_PATH="${PACT_CONFIG_FILE_PATH}"
+
 # Define distro metadata: id|name|vmid_offset
 # Maps distro names to their identifiers for easy grouping
 declare -a DISTRO_METADATA=(
@@ -129,7 +147,7 @@ Usage: $0 [OPTIONS]
 
 Options:
   --interactive              Prompt the user for all settings interactively.
-  --packer                   Run Packer builds for image customization.
+  --run-packer               Run Packer builds for image customization.
   --rebuild                  Delete existing VMs before building new ones (destructive).
   --proxmox-host=HOSTNAME    Proxmox hostname or IP address (default: pve.local).
   --proxmox-user=USERNAME    SSH username for Proxmox (default: root).
@@ -143,8 +161,8 @@ Options:
   --custom-packerfile=PATH   Path or URL to custom Packer template file instead of default.
   --custom-ansible=PATH      Path or URL to custom Ansible playbook for Packer customization.
   --custom-ansible-varfile=PATH  Path or URL to custom variables file for Ansible playbook (default: ./Ansible/Variables/vars.yml).
-  --packer-token-id=TOKEN    Proxmox API Token ID for Packer (required with --packer).
-  --packer-token-secret=SEC  Proxmox API Token Secret for Packer (required with --packer).
+  --packer-token-id=TOKEN    Proxmox API Token ID for Packer (required with --run-packer).
+  --packer-token-secret=SEC  Proxmox API Token Secret for Packer (required with --run-packer).
   --help                     Show this help and exit
 
 Notes:
@@ -159,7 +177,7 @@ EOF
 # Parse CLI arguments
 for arg in "$@"; do
     case "$arg" in
-        --packer)
+        --run-packer)
             RUN_PACKER=true
             ;;
         --rebuild)
@@ -479,7 +497,7 @@ fi
 # Validate required variables for Packer
 if [ "$RUN_PACKER" = true ]; then
     if [ -z "$PACKER_TOKEN_ID" ] || [ -z "$PACKER_TOKEN_SECRET" ]; then
-        echo "Error: PACKER_TOKEN_ID and PACKER_TOKEN_SECRET are required when using --packer" >&2
+        echo "Error: PACKER_TOKEN_ID and PACKER_TOKEN_SECRET are required when using --run-packer" >&2
         exit 1
     fi
 fi
@@ -723,7 +741,7 @@ if [ "$PROXMOX_IS_REMOTE" = true ] && [ "$USE_ANSIBLE" = false ]; then
     fi
 fi
 
-# Install Packer only if --packer option is enabled (regardless of local or remote)
+# Install Packer only if --run-packer option is enabled (regardless of local or remote)
 if [ "$RUN_PACKER" = true ]; then
     if ! command -v packer &> /dev/null
     then
