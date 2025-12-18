@@ -17,13 +17,13 @@
 #   --build=LIST                Comma-separated list of distros to create
 #                               Options: all, debian, ubuntu, or individual names
 #                               Example: debian12,ubuntu2404,fedora41
-#   --rebuild                   Delete existing VMs before building (destructive)
+#   --rebuild-templates            Delete existing VMs before building (destructive)
 #   --run-packer                Packer will customize templates after creation
 #                               Also accepts: --packer-enabled (for backward compatibility)
 #   --help                      Display help message
 #
 # Distro Options:
-#   Individual: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43, rocky9
+#   Individual: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43
 #   Groups:     debian (all Debian versions), ubuntu (all Ubuntu versions), fedora (all Fedora versions)
 #   Special:    all (create all distros)
 #
@@ -31,7 +31,6 @@
 #   debian11: 801,   debian12: 802,   debian13: 803
 #   ubuntu2204: 811, ubuntu2404: 812, ubuntu2504: 813
 #   fedora41: 821,   fedora42: 822,   fedora43: 823
-#   rocky9: 831
 #
 # If Packer is enabled (--run-packer), customized VMs get base+100 offset
 # Example: debian12 base template = 802, Packer customized = 902
@@ -44,7 +43,7 @@
 #   ./proxmox.sh --vmid-base=800 --proxmox-storage=local-lvm --build=all --run-packer
 #
 #   # Rebuild existing templates (delete and recreate)
-#   ./proxmox.sh --vmid-base=800 --proxmox-storage=local-lvm --build=debian --rebuild
+#   ./proxmox.sh --vmid-base=800 --proxmox-storage=local-lvm --build=debian --rebuild-templates
 #
 ################################################################################
 
@@ -65,7 +64,6 @@ declare -a DISTRO_METADATA=(
     "fedora41|Fedora-41|21|fedora-41-template.qcow2|https://fedora.mirror.constant.com/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2"
     "fedora42|Fedora-42|22|fedora-42-template.qcow2|https://fedora.mirror.constant.com/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2"
     "fedora43|Fedora-43|23|fedora-43-template.qcow2|https://fedora.mirror.constant.com/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2"
-    "rocky9|Rocky-9|31|rocky-9-template.qcow2|http://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud.latest.x86_64.qcow2"
 )
 
 # Map of distro groups to their individual IDs
@@ -73,12 +71,12 @@ declare -A DISTRO_GROUPS=(
     [debian]="debian11 debian12 debian13"
     [ubuntu]="ubuntu2204 ubuntu2404 ubuntu2504"
     [fedora]="fedora41 fedora42 fedora43"
-    [all]="debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43 rocky9"
+    [all]="debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43"
 )
 
 print_usage() {
         cat <<EOF
-Usage: $0 [--vmid-base=800] [--proxmox-storage=local-lvm] [--build=LIST] [--rebuild] [--run-packer]
+Usage: $0 [--vmid-base=800] [--proxmox-storage=local-lvm] [--build=LIST] [--rebuild-templates] [--run-packer]
 
 Options:
     --vmid-base=NUM        Base VMID to use. Defaults to ${DEFAULT_VMID_BASE}.
@@ -87,8 +85,8 @@ Options:
                         all      - build every distro (default)
                         debian   - debian11, debian12, debian13
                         ubuntu   - ubuntu2204, ubuntu2404, ubuntu2504
-                      Individual names: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43, rocky9
-    --rebuild         Delete existing VMs at target VMIDs before building (destructive).
+                      Individual names: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43
+    --rebuild-templates     Delete existing VMs at target VMIDs before building (destructive).
                       Without this flag, existing VMs are preserved.
     --run-packer      Packer will be used for customization. Checks both base and packer VMIDs.
     --help            Show this help and exit
@@ -98,8 +96,8 @@ EOF
 # Defaults (may be overridden by Options.ini earlier)
 VMID_BASE="${DEFAULT_VMID_BASE}"
 PROXMOX_STORAGE="${PROXMOX_STORAGE:-$DEFAULT_PROXMOX_STORAGE}"
-DISTRO_BUILD_SELECTION="all"
-REBUILD=false
+BUILD_DISTROS="all"
+REBUILD_TEMPLATES=false
 RUN_PACKER=false
 
 for arg in "$@"; do
@@ -108,8 +106,8 @@ for arg in "$@"; do
         --vmid=*) VMID_BASE="${arg#*=}" ;;
         --proxmox-storage=*) PROXMOX_STORAGE="${arg#*=}" ;;
         --storage=*) PROXMOX_STORAGE="${arg#*=}" ;;
-        --build=*) DISTRO_BUILD_SELECTION="${arg#*=}" ;;
-        --rebuild) REBUILD=true ;;
+        --build=*) BUILD_DISTROS="${arg#*=}" ;;
+        --rebuild-templates) REBUILD_TEMPLATES=true ;;
         --run-packer) RUN_PACKER=true ;;
         --packer-enabled) RUN_PACKER=true ;;
         --help) print_usage; exit 0 ;;
@@ -119,18 +117,18 @@ done
 
 # Parse build list and populate selected distros
 SELECTED_DISTROS=""
-if [ -z "${DISTRO_BUILD_SELECTION}" ] || [ "${DISTRO_BUILD_SELECTION}" = "all" ]; then
+if [ -z "${BUILD_DISTROS}" ] || [ "${BUILD_DISTROS}" = "all" ]; then
     SELECTED_DISTROS="${DISTRO_GROUPS[all]}"
 else
     # Support comma or space separated list
-    items="$(echo "$DISTRO_BUILD_SELECTION" | tr ',' ' ')"
+    items="$(echo "$BUILD_DISTROS" | tr ',' ' ')"
     for item in $items; do
         if [ -n "${DISTRO_GROUPS[$item]}" ]; then
             # It's a group (debian, ubuntu, etc.)
             SELECTED_DISTROS="${SELECTED_DISTROS} ${DISTRO_GROUPS[$item]}"
         else
             # Check if it's a valid individual distro ID
-            if [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43 rocky9 " =~ " $item " ]]; then
+            if [[ " debian11 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2504 fedora41 fedora42 fedora43 " =~ " $item " ]]; then
                 SELECTED_DISTROS="${SELECTED_DISTROS} $item"
             else
                 echo "Warning: unknown build item '$item' - ignoring" >&2
@@ -142,7 +140,7 @@ fi
 # Remove duplicates and normalize spacing
 SELECTED_DISTROS="$(echo "$SELECTED_DISTROS" | tr ' ' '\n' | sort -u | tr '\n' ' ' | xargs)"
 
-echo "Using VMID_BASE=${VMID_BASE}, storage=${PROXMOX_STORAGE}, build='${DISTRO_BUILD_SELECTION}', selected='${SELECTED_DISTROS}', rebuild=${REBUILD}, run-packer=${RUN_PACKER}"
+echo "Using VMID_BASE=${VMID_BASE}, storage=${PROXMOX_STORAGE}, build='${BUILD_DISTROS}', selected='${SELECTED_DISTROS}', rebuild-templates=${REBUILD_TEMPLATES}, run-packer=${RUN_PACKER}"
 
 # Create and configure a VM template
 create_template() {
@@ -187,7 +185,7 @@ manage_vmid_lifecycle() {
     local vmid="$1"
     local offset="$2"
     
-    if [ "$REBUILD" = true ]; then
+    if [ "$REBUILD_TEMPLATES" = true ]; then
         qm destroy "$vmid" 2>/dev/null
         # Only destroy packer VMID if packer is enabled
         if [ "$RUN_PACKER" = true ]; then
@@ -196,13 +194,13 @@ manage_vmid_lifecycle() {
     else
         # Check base VMID
         if check_vmid_exists "$vmid"; then
-            echo "Error: VMID $vmid is already in use. Use --rebuild to replace it, or choose a different VMID_BASE." >&2
+            echo "Error: VMID $vmid is already in use. Use --rebuild-templates to replace it, or choose a different VMID_BASE." >&2
             return 1
         fi
         # Check packer VMID only if packer is enabled
         if [ "$RUN_PACKER" = true ]; then
             if check_vmid_exists "$((vmid + 100))"; then
-                echo "Error: Packer VMID $((vmid + 100)) is already in use. Use --rebuild to replace it, or choose a different VMID_BASE." >&2
+                echo "Error: Packer VMID $((vmid + 100)) is already in use. Use --rebuild-templates to replace it, or choose a different VMID_BASE." >&2
                 return 1
             fi
         fi
