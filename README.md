@@ -42,18 +42,18 @@ After base templates are created (regardless of whether SSH or Ansible mode was 
     - `--interactive`: Interactive mode with user prompts for all settings
     - `--packer`: Enable Packer customization phase
     - `--ansible`: Use Ansible instead of SSH/proxmox.sh for template creation (optional alternative)
-    - `--rebuild`: Delete existing VMs before rebuilding (prevents accidental deletion without this flag)
+    - `--rebuild-templates` - Delete existing VMs before rebuilding (prevents accidental deletion without this flag)
   - **proxmox.sh**: Executed on Proxmox host to create base templates. Accepts CLI parameters:
     - `--vmid-base=NUM`: Starting VMID (default: 800)
     - `--proxmox-storage=NAME`: Storage pool name (default: local-lvm)
     - `--build=LIST`: Comma-separated distro list (default: all)
-    - `--rebuild`: Delete existing VMs before building (safe by default without this flag)
+    - `--rebuild-templates`: Delete existing VMs before building (safe by default without this flag)
     - `--run-packer`: Enable Packer customization phase
   - **proxmox-updated.sh**: Alias/copy of proxmox.sh for reference
 
 - **Packer/**
   - **Templates/**: 
-    - **universal.pkr.hcl**: Universal template supporting all 9 distros. Uses `distro` variable to configure behavior for: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, rocky9
+    - **universal.pkr.hcl**: Universal template supporting all supported distros. Uses `distro` variable to configure behavior for: debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43
     - Individual distro files (debian11.pkr.hcl, etc.) are deprecated; use universal.pkr.hcl instead
 
 - **Ansible/**
@@ -121,7 +121,7 @@ Choose which Linux distributions to create templates for. Options include:
 - `debian` - All Debian versions (11, 12, 13)
 - `ubuntu` - All Ubuntu versions (22.04, 24.04, 25.04)
 - `fedora` - All Fedora versions (41, 42)
-- Individual names: `debian11`, `debian12`, `debian13`, `ubuntu2204`, `ubuntu2404`, `ubuntu2504`, `fedora41`, `fedora42`, `fedora43`, `rocky9`
+- Individual names: `debian11`, `debian12`, `debian13`, `ubuntu2204`, `ubuntu2404`, `ubuntu2504`, `fedora41`, `fedora42`, `fedora43`
 
 Example: `debian12,ubuntu2404,fedora43` to create only Debian 12, Ubuntu 24.04, and Fedora 43 templates
 
@@ -134,9 +134,6 @@ Choose whether to run the Packer customization phase after creating base templat
 Enter the starting VMID number for your templates (default: 800). The script will automatically assign sequential IDs based on distro offsets:
 - Debian 11-13: base+1, base+2, base+3
 - Ubuntu 22.04-25.04: base+11, base+12, base+13
-- Fedora 41: base+21
-- Rocky 9: base+31
-
 If Packer is enabled, customized versions will use base+100 offset (e.g., 901, 902, 903 for Debian with Packer).
 
 #### 4. Is the Proxmox server remote?
@@ -172,8 +169,8 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
 ```bash
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
-  --proxmox-user=root \
-  --proxmox-password="password" \
+  --proxmox-ssh-user=root \
+  --proxmox-ssh-password="password" \
   --storage=local-lvm \
   --packer
 ```
@@ -182,7 +179,7 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
 - `--interactive` - Prompt user for all settings interactively
 - `--ansible` - Use Ansible to create templates (Ansible/Playbooks/create_templates.yml) instead of proxmox.sh
 - `--packer` - Enable Packer customization phase
-- `--rebuild` - Delete existing VMs before building (destructive)
+- `--rebuild-templates` - Delete existing VMs before building (destructive)
 - `--proxmox-host=HOSTNAME` - Proxmox hostname or IP address (default: pve.local)
 - `--proxmox-ssh-user=USERNAME` - SSH username for Proxmox (default: root)
 - `--proxmox-ssh-password=PASS` - SSH password for Proxmox authentication
@@ -318,13 +315,11 @@ For automation, scripts, or CI/CD pipelines, specify all options as command-line
 ```bash
 ./Scripts/build.sh \
   --proxmox-host=pve.local \
-  --proxmox-user=root \
-  --proxmox-password="password" \
+  --proxmox-ssh-user=root \
+  --proxmox-ssh-password="password" \
   --storage=local-lvm \
   --packer
 ```
-
-#### Answerfile Mode
 
 For repeatable configurations or team environments, use an answerfile (.env.local) to store your settings:
 
@@ -340,13 +335,13 @@ For repeatable configurations or team environments, use an answerfile (.env.loca
 
    Key parameters:
    - `PROXMOX_HOST` - Proxmox hostname or IP
-   - `PROXMOX_HOST_NODE` - Node name (usually "pve")
+   - `PROXMOX_TARGET_NODE` - Node name (usually "pve")
    - `PROXMOX_SSH_USER` - SSH username (usually "root")
    - `PROXMOX_SSH_PASSWORD` - SSH password (or leave empty to use key)
    - `SSH_PRIVATE_KEY_PATH` - Path to SSH key file (optional, instead of password)
-   - `PROXMOX_STORAGE_POOL` - Storage pool name
-   - `nVMID` - Starting VMID
-   - `BUILD_TEMPLATES` - Which templates ("all", "debian", "ubuntu", or comma-separated names)
+   - `PROXMOX_STORAGE` - Storage pool name
+   - `VMID_BASE` - Starting VMID
+   - `BUILD_DISTROS` - Which distros ("all", "debian", "ubuntu", "fedora", or comma-separated names)
    - `RUN_PACKER` - Enable Packer customization (true/false)
    - `PACKER_TOKEN_ID` - Proxmox API Token ID (if using Packer)
    - `PACKER_TOKEN_SECRET` - Proxmox API Token Secret (if using Packer)
@@ -368,18 +363,17 @@ For repeatable configurations or team environments, use an answerfile (.env.loca
 ```bash
 # Copy this file to .env.local and customize for your environment
 PROXMOX_HOST="pve.local"
-PROXMOX_HOST_NODE="pve"
+PROXMOX_TARGET_NODE="pve"
 PROXMOX_SSH_USER="root"
 PROXMOX_SSH_PASSWORD="your_password_here"
 SSH_PRIVATE_KEY_PATH=""
-PROXMOX_STORAGE_POOL="local-lvm"
-nVMID=800
-USE_ANSIBLE=false
+PROXMOX_STORAGE="local-lvm"
+VMID_BASE=800
 RUN_PACKER=true
 PACKER_TOKEN_ID="packer@pam!packer_token"
 PACKER_TOKEN_SECRET="your_token_secret"
-BUILD_TEMPLATES="all"
-REBUILD=false
+BUILD_DISTROS="all"
+REBUILD_TEMPLATES=false
 ```
 
 **Examples**:
@@ -408,10 +402,10 @@ ssh root@pve.local
 - `--vmid-base=NUM` - Starting VMID (default: 800)
 - `--proxmox-storage=NAME` - Storage pool name (default: local-lvm)
 - `--build=LIST` - Comma-separated distro names (default: all)
-  - Individual: `debian11`, `debian12`, `debian13`, `ubuntu2204`, `ubuntu2404`, `ubuntu2504`, `fedora41`, `rocky9`
+  - Individual: `debian11`, `debian12`, `debian13`, `ubuntu2204`, `ubuntu2404`, `ubuntu2504`, `fedora41`, `fedora42`, `fedora43`
   - Groups: `debian` (all Debian), `ubuntu` (all Ubuntu)
   - Example: `--build=debian12,ubuntu2404,fedora41`
-- `--rebuild` - Delete existing VMs at target VMIDs before building
+- `--rebuild-templates` - Delete existing VMs at target VMIDs before building
   - Without this flag (default): Existing VMs are preserved
   - With this flag: Old VMs are destroyed before creating new ones
 
@@ -435,7 +429,6 @@ VM template VMIDs follow this numbering scheme (with default nVMID=800):
 | Fedora 41 | 821 |
 | Fedora 42 | 822 |
 | Fedora 43 | 823 |
-| Rocky Linux 9 | 831 |
 
 If using Packer customization, customized VMs get base VMID + 100 (e.g., Debian 12 → 902).
 
@@ -450,7 +443,6 @@ If using Packer customization, customized VMs get base VMID + 100 (e.g., Debian 
 - Fedora 41
 - Fedora 42
 - Fedora 43
-- Rocky Linux 9
 
 ## Links
 
