@@ -7,7 +7,7 @@
 # templates and customizing them with Packer. It supports three configuration modes:
 #
 #  - Interactive mode: Prompts user for all settings
-#  - CLI arguments: Pass settings directly (--proxmox-host=, --templates=, etc.)
+#  - CLI arguments: Pass settings directly (--proxmox-host=, --build-distros=, etc.)
 #  - Answerfile: Load from .env.local configuration file
 #
 # Multiple template creation methods:
@@ -161,7 +161,7 @@ Options:
   --proxmox-storage=POOL     Proxmox storage pool name (default: local-lvm).
   --proxmox-target-node=NODE Proxmox target node for Packer (default: pve).
   --local                    Run directly on Proxmox host (no SSH needed).
-  --templates=LIST           Comma-separated list of templates to build (e.g., debian12,ubuntu2404).
+  --build-distros=LIST       Comma-separated list of distros to build (e.g., debian12,ubuntu2404).
   --answerfile-path=PATH          Path to custom answerfile (.env.local used by default if exists).
   --custom-packerfile=PATH   Path or URL to custom Packer template file instead of default.
   --custom-ansible=PATH      Path or URL to custom Ansible playbook for Packer customization.
@@ -174,19 +174,25 @@ Notes:
   - If --interactive is set, no other arguments are allowed (it overrides everything).
   - Without --local, defaults to SSH mode (remote Proxmox).
   - Without --rebuild-templates, existing VMs at target VMIDs are preserved (safer).
-  - --templates accepts: all, debian, ubuntu, fedora, individual names (debian11, debian12, ubuntu2204, fedora43, etc.)
-  - --custom-packerfile allows using a custom Packer template with --packer.
+  - --build-distros accepts: all, debian, ubuntu, fedora, individual names (debian11, debian12, ubuntu2204, fedora43, etc.)
+  - --custom-packerfile allows using a custom Packer template with --run-packer.
 EOF
 }
 
 # Parse CLI arguments
 for arg in "$@"; do
     case "$arg" in
-        --run-packer)
+        --run-packer|--run-packer=true)
             RUN_PACKER=true
             ;;
-        --rebuild-templates)
+        --run-packer=false)
+            RUN_PACKER=false
+            ;;
+        --rebuild-templates|--rebuild-templates=true)
             REBUILD_TEMPLATES=true
+            ;;
+        --rebuild-templates=false)
+            REBUILD_TEMPLATES=false
             ;;
         --interactive)
             INTERACTIVE_MODE=true
