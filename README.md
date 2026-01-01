@@ -72,7 +72,7 @@ After base templates are created (regardless of whether SSH or Ansible mode was 
 1. **Clone the Repository**
 
    ```bash
-   git clone https://github.com/ColtonDx/Proxmox-P.A.C.T.git
+   git clone https://github.com/ColtonDx/Proxmox-P.A.C.T..git
    cd Proxmox-P.A.C.T
    chmod +x ./Scripts/build.sh
    ```
