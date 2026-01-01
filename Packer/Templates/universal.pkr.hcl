@@ -5,7 +5,7 @@
 # the 'distro' variable. Supported distros:
 #   - debian11, debian12, debian13
 #   - ubuntu2204, ubuntu2404, ubuntu2504
-#   - fedora41, fedora42, fedora43
+#   - fedora42, fedora43
 #
 # Usage:
 #   packer build -var "distro=debian12" -var-file=vars.json universal.pkr.hcl
@@ -60,7 +60,7 @@ variable "vmid" {
 
 variable "distro" {
     type = string
-    description = "Distribution to build (debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora41, fedora42, fedora43)"
+    description = "Distribution to build (debian11, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2504, fedora42, fedora43)"
 }
 
 variable "ansible_playbook" {
@@ -107,11 +107,6 @@ locals {
       template_name  = "Template-Ubuntu-2504"
       vm_name        = "PACT-Ubuntu-2504"
       build_name     = "Ubuntu2504-Packer"
-    }
-    fedora41 = {
-      template_name  = "Template-Fedora-41"
-      vm_name        = "PACT-Fedora-41"
-      build_name     = "Fedora41-Packer"
     }
     fedora42 = {
       template_name  = "Template-Fedora-42"
