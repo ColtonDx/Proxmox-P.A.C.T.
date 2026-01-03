@@ -1,32 +1,32 @@
 # Proxmox Packer Ansible CloudInit Templates - Proxmox P.A.C.T.
 <img src="Images/Logo.jpg" alt="Application Logo" width="200"/>
 
-P.A.C.T. stands for Packer Ansible CloudInit Templates, for Proxmox! P.A.C.T. creates a series of Linux VM Templates on your Proxmox instance from a variety of distros and versions. These templates will be preconfigured for CloudInit making it so that things like resizing the filesystem or forgetting your password can easily be handled from the Proxmox web interface. We will also preinstall the QEMU-GUEST-AGENT service so that the VMs interact with Proxmox without having the dreaded "Could not get a Lock" issue. These templates can also leverage both Packer and Ansible to generalize and update the images. These Ansible and Packer configurations are easily customized by the user to allow you to make your own custom templates using whichever tool is easiest for you.
+P.A.C.T. stands for Packer Ansible CloudInit Templates. P.A.C.T. creates a series of Linux VM Templates on your Proxmox instance from a variety of distros and versions. These templates will be preconfigured for CloudInit making it so that things like resizing the filesystem or forgetting your password can easily be handled from the Proxmox web interface. We will also preinstall the QEMU-GUEST-AGENT service so that the VMs interact with Proxmox without having the "Could not get a Lock" issue. These templates can also leverage both Packer and Ansible to generalize and update the images. You can also pipe in your own Ansible/Packer playbooks to customize your images
+
+Disclaimer! AI Tools were used to generate some of the functioanlity in these tools, though the core scripts are refinements on earlier scripts I personally wrote.
 
 [![Support](https://img.shields.io/badge/Support-Buy_Me_A_Coffee-yellow?style=for-the-badge&logo=buy%20me%20a%20coffee&color=FFDD00)](https://www.buymeacoffee.com/ColtonDx)
 
 ## How it Works
 
-The workflow has two deployment modes for template creation:
-
 ### SSH Mode (Default)
 1. **On your management machine**: 
-   - Reads configuration from CLI arguments, interactive mode, environment variables, or an answerfile
-   - Builds a list of distros to process based on enabled options or explicit `--build-distros` parameter
+   - Reads input from: CLI arguments, interactive mode, environment variables, or an answerfile
    - Connects to Proxmox via SSH using password or key-based authentication
    - Uploads `proxmox.sh` script with CLI parameters (`--vmid-base`, `--proxmox-storage`, `--build`)
-   - Executes proxmox.sh remotely
+   - Executes proxmox.sh remotely to build the base templates
+   - Executed the default or custom Packer/Ansible customization if the flags are set
    **On Proxmox**:
-   - Downloads cloud images for each enabled distros
+   - Downloads cloud images for each enabled distros from public repos
    - Customizes VMs with virt-customize (qemu-guest-agent, CloudInit, etc.)
    - Converts VMs to templates
    - Cleans up temporary resources
-   - Note: running Packer/Ansible will install Packer and Ansible on your Proxmox instance which is not recommended.
 
 3. **Standalone Mode (Direct on Proxmox)**
-- Copy `build.sh` directly to your Proxmox host
+- Copy the Repo directly to your Proxmox host
 - Execute locally without SSH: `./build.sh --local`
 - Runs the same template creation process without the SSH connections
+- NOTE: Running --local with Packer/Ansiblr customizations will install those prerequisites on your Proxmox host which is not recommended
 
 ### Post-Template Customization (Optional)
 After base templates are created (regardless of whether SSH or Ansible mode was used), Packer can optionally customize templates:
@@ -34,7 +34,7 @@ After base templates are created (regardless of whether SSH or Ansible mode was 
 1. **Packer customization**:
    - `build.sh` with `--run-packer` flag runs universal.pkr.hcl (or custom packerfile with `--custom-packerfile`) against created templates
     - Uses Ansible provisioning internally via `image_customizations.yml` (or custom playbook with `--custom-ansible-playbook`)
-   - Supports all 9 distros with single template file using distro parameter
+   - All distributions will run the same packerfile so make sure to include checks for distribution in your customizations
    - Requires Proxmox API Token for authentication
 
 ## Repository Structure
